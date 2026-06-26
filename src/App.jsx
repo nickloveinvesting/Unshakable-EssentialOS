@@ -719,6 +719,66 @@ const SavedDealsProvider = ({children}) => {
 };
 const useSavedDealsContext = () => useContext(SavedDealsContext);
 
+const useZipMarket = (zip) => {
+    const [row,setRow]=useState(null);
+    const [loading,setLoading]=useState(false);
+    useEffect(()=>{
+        const z=(zip||'').trim();
+        if(!/^\d{5}$/.test(z)){setRow(null);return;}
+        let active=true;setLoading(true);
+        supabase.from('zip_market_data').select('*').eq('zipcode',z).maybeSingle().then(({data})=>{if(active){setRow(data||null);setLoading(false);}});
+        return ()=>{active=false;};
+    },[zip]);
+    return {row,loading};
+};
+
+const MarketSnapshot = () => {
+    const {deal,updateDeal}=useDeal();
+    const toast=useToast();
+    const {row:market,loading}=useZipMarket(deal.zip);
+    const zipValid=/^\d{5}$/.test((deal.zip||'').trim());
+    const beds=parseInt(deal.beds)||0;
+    if(!zipValid||!beds) return null;
+    if(loading) return (<aside className="bg-[#1A1A1A] rounded-xl border border-[#2A2A2A] p-4 mt-4 no-print"><div className="flex items-center gap-2 text-xs text-slate-500"><div className="w-3.5 h-3.5 rounded-full border-2 border-[#2A2A2A] border-t-amber-400" style={{animation:'eo_spin .7s linear infinite'}}></div>Loading market data…</div></aside>);
+    if(!market) return (<aside className="bg-[#1A1A1A] rounded-xl border border-[#2A2A2A] p-4 mt-4 no-print"><p className="text-xs text-slate-500">No Zillow/Redfin data on file for ZIP {deal.zip}.</p></aside>);
+    const bedKey={1:'avg_1bed',2:'avg_2bed',3:'avg_3bed',4:'avg_4bed',5:'avg_5bed'}[Math.min(Math.max(beds,1),5)];
+    const bedVal=market[bedKey];
+    const arv=parseFloat(deal.arv)||0;
+    const sqft=parseFloat(deal.sqft)||0;
+    const zipPpsf=market.median_sale_price_per_sqft;
+    const userPpsf=(sqft>0&&arv>0)?arv/sqft:0;
+    const ppsfDelta=(zipPpsf&&userPpsf)?((userPpsf-zipPpsf)/zipPpsf)*100:null;
+    const mos=market.months_of_supply;
+    const heat=mos==null?null:(mos<3?{t:'Fast-moving market',c:'text-emerald-300',b:'bg-emerald-500/10 border-emerald-500/30'}:mos<=6?{t:'Balanced market',c:'text-amber-300',b:'bg-amber-500/10 border-amber-500/30'}:{t:'Slow market',c:'text-red-300',b:'bg-red-500/10 border-red-500/30'});
+    const applyArv=(v)=>{updateDeal({arv:String(Math.round(v))});toast?.show('ARV set from ZIP data');};
+    const Stat=({label,value})=>(<div className="bg-[#0F0F0F] rounded p-2"><p className="text-[10px] uppercase tracking-wider text-slate-500">{label}</p><p className="text-sm text-white accent-num mt-0.5">{value}</p></div>);
+    return (
+        <aside className="bg-[#1A1A1A] rounded-xl border border-[#2A2A2A] p-5 mt-4 no-print eo-stagger">
+            <div className="flex items-center justify-between">
+                <h3 className="text-xs uppercase tracking-wider text-slate-400 headline flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-amber-400" /> Market Snapshot</h3>
+                <span className="text-[10px] text-slate-600">ZIP {market.zipcode}</span>
+            </div>
+            <p className="text-xs text-slate-500 mt-1 truncate">{[market.city,market.state].filter(Boolean).join(', ')}{market.metro?` · ${market.metro.split(',')[0]}`:''}</p>
+            {heat&&<div className={`mt-3 text-xs px-2.5 py-1.5 rounded border inline-flex items-center gap-1.5 ${heat.b} ${heat.c}`}><Activity className="w-3 h-3" />{heat.t}{mos!=null?` · ${mos} mo supply`:''}</div>}
+            <div className="mt-3 bg-[#0F0F0F] rounded-lg p-3">
+                <p className="text-[10px] uppercase tracking-wider text-slate-500">Typical {beds}-bed value (ZIP)</p>
+                <div className="flex items-center justify-between gap-2 mt-1">
+                    <p className="text-xl font-bold gradient-text accent-num">{bedVal?formatCurrencySimple(bedVal):'—'}</p>
+                    {bedVal>0&&<button onClick={()=>applyArv(bedVal)} className="text-[11px] fire-bg text-black font-bold px-2.5 py-1 rounded flex items-center gap-1 hover:opacity-90"><Check className="w-3 h-3" /> Use as ARV</button>}
+                </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 mt-3">
+                <Stat label="Median sale" value={market.median_sale_price_nsa?formatCurrencySimple(market.median_sale_price_nsa):'—'} />
+                <Stat label="Median $/sqft" value={zipPpsf?`$${Math.round(zipPpsf)}`:'—'} />
+                <Stat label="Days on market" value={market.median_days_on_market!=null?`${Math.round(market.median_days_on_market)} days`:'—'} />
+                <Stat label="Sale-to-list" value={market.avg_sale_to_list_ratio_pct!=null?`${market.avg_sale_to_list_ratio_pct}%`:'—'} />
+            </div>
+            {ppsfDelta!=null&&<div className="mt-3 text-xs flex items-start gap-1.5">{Math.abs(ppsfDelta)<=10?<CheckCircle className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />:<AlertTriangle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" />}<span className="text-slate-400">Your ARV is <span className={ppsfDelta>0?'text-amber-300':'text-emerald-300'}>{Math.abs(ppsfDelta).toFixed(0)}% {ppsfDelta>0?'above':'below'}</span> the ZIP median $/sqft</span></div>}
+            <p className="text-[10px] text-slate-600 mt-3">Zillow + Redfin{market.date_updated?` · as of ${market.date_updated}`:''}</p>
+        </aside>
+    );
+};
+
 const DealSnapshotRail = () => {
     const {deal,updateDeal}=useDeal();
     const {saveDeal}=useSavedDealsContext();
@@ -737,6 +797,7 @@ const DealSnapshotRail = () => {
     const handleShare=async()=>{const url=`${window.location.origin}${window.location.pathname}?deal=${encodeDealToUrl(deal)}`;try{await navigator.clipboard.writeText(url);toast?.show('Share URL copied');}catch(e){window.prompt('Copy URL:',url);}};
     const handlePrint=()=>{window.print();};
     return (
+        <>
         <aside className="bg-[#1A1A1A] rounded-xl border border-[#2A2A2A] p-5 space-y-3 no-print">
             <div className="flex items-center justify-between"><h3 className="text-xs uppercase tracking-wider text-slate-400 headline">Deal Snapshot</h3><Activity className="w-4 h-4 text-amber-400" /></div>
             <div className="flex items-center justify-between"><div><p className="text-xs text-slate-500">Address</p><p className="text-sm text-white truncate">{deal.address||'No address yet'}</p></div>{deal.selectedStrategy&&<span className="text-xs bg-[#0F0F0F] text-slate-300 px-2 py-0.5 rounded capitalize">{deal.selectedStrategy}</span>}</div>
@@ -748,6 +809,8 @@ const DealSnapshotRail = () => {
             {hasInputs?(<div className="bg-[#0F0F0F] rounded p-3 text-center"><p className="text-xs text-slate-500 uppercase">Deal Score</p><p className="text-3xl font-bold gradient-text accent-num">{score.total.toFixed(1)}<span className="text-sm text-slate-500">/100</span></p><p className="text-xs text-slate-400">{score.verdict} ({score.grade})</p></div>):(<div className="bg-[#0F0F0F] rounded p-3 text-center border border-dashed border-[#333]"><p className="text-xs text-slate-500">Score available after deal numbers entered</p></div>)}
             <div className="grid grid-cols-3 gap-1 pt-2"><button onClick={handleSave} className="text-xs bg-[#0F0F0F] hover:bg-[#222] text-white px-2 py-1.5 rounded flex items-center justify-center gap-1"><Save className="w-3 h-3" /> Save</button><button onClick={handlePrint} className="text-xs bg-[#0F0F0F] hover:bg-[#222] text-white px-2 py-1.5 rounded flex items-center justify-center gap-1"><Printer className="w-3 h-3" /> PDF</button><button onClick={handleShare} className="text-xs bg-[#0F0F0F] hover:bg-[#222] text-white px-2 py-1.5 rounded flex items-center justify-center gap-1"><Share2 className="w-3 h-3" /> Share</button></div>
         </aside>
+        <MarketSnapshot />
+        </>
     );
 };
 
