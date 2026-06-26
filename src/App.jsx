@@ -881,62 +881,61 @@ const HomePage = ({onChangeView}) => {
     const {deal,resetDeal}=useDeal();
     const {deals}=useSavedDealsContext();
     const hasCurrent=deal.address||Object.keys(deal.selectedItems||{}).filter(k=>deal.selectedItems[k]).length>0;
-    const recent=deals.slice(0,3);
     const handleNew=()=>{if(hasCurrent&&!window.confirm('Start a new deal? Your current deal will be cleared. Save it first if you want to keep it.'))return;resetDeal();onChangeView(View.RehabEstimator);};
-    const handleContinue=()=>onChangeView(View.RehabEstimator);
-    const stages=[
-        {icon:Construction,name:'Rehab Scope',desc:'Build the number, line by line. 62 items, metro-adjusted.',view:View.RehabEstimator},
-        {icon:Compass,name:'Strategy',desc:'Wholesale, rental, or flip. All 9 scenarios at once.',view:View.StrategyAnalyzer},
-        {icon:DollarSign,name:'Financing',desc:'5 financing stacks, side by side. Best in column wins.',view:View.FinancingProfit},
-        {icon:Award,name:'Score',desc:'20 metrics. BUY, WAIT, or KILL before you sign.',view:View.DealScore}
-    ];
+    const loadDeal=(d)=>{window.dispatchEvent(new CustomEvent('loadDeal',{detail:d}));onChangeView(View.RehabEstimator);};
+    const scored=useMemo(()=>deals.map(d=>{const sc=computeDealScore(d);return {...d,_score:sc.total,_verdict:sc.verdict};}),[deals]);
+    const kpis=useMemo(()=>{const n=scored.length;const best=n?Math.max(...scored.map(d=>d.netProfit||0)):0;const avg=n?Math.round(scored.reduce((a,d)=>a+(d._score||0),0)/n):0;const buys=scored.filter(d=>d._verdict==='BUY').length;return {n,best,avg,buys};},[scored]);
+    const today=new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+    const resume=deals[0]||null;
+    const stages=[{name:'Rehab scope',view:View.RehabEstimator},{name:'Strategy',view:View.StrategyAnalyzer},{name:'Financing',view:View.FinancingProfit},{name:'Score',view:View.DealScore}];
+    const chip=(v)=>v==='BUY'?'bg-emerald-500/10 text-emerald-300 border-emerald-500/30':v==='WAIT'?'bg-amber-500/10 text-amber-300 border-amber-500/30':'bg-red-500/10 text-red-300 border-red-500/30';
+    const Kpi=({n,l})=>(<div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl px-4 py-3"><p className="accent-num text-xl font-extrabold text-white">{n}</p><p className="text-[11px] uppercase tracking-wider text-slate-500 mt-0.5">{l}</p></div>);
     return (
-        <div className="space-y-10 py-6">
-            <section className="text-center max-w-3xl mx-auto px-4 eo-stagger">
-                <p className="text-sm uppercase tracking-widest text-amber-400 mb-3">The Unshakable Investor</p>
-                <h1 className="text-5xl sm:text-6xl font-extrabold headline gradient-text leading-tight">The Deal Analyzer</h1>
-                <p className="text-lg sm:text-xl text-slate-300 mt-4">Underwrite a fix and flip in 8 minutes. Score it before you sign.</p>
-                <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-                    <button onClick={handleNew} className="fire-bg text-black font-extrabold uppercase tracking-wider px-8 py-4 rounded-lg headline hover:opacity-90">Start a New Deal</button>
-                    {hasCurrent&&<button onClick={handleContinue} className="border-2 border-amber-500 text-amber-400 font-bold uppercase tracking-wider px-8 py-4 rounded-lg hover:bg-amber-500/10">Continue Last Deal</button>}
-                </div>
-                <div className="mt-10 grid grid-cols-2 sm:grid-cols-4 gap-px bg-[#2A2A2A] rounded-xl overflow-hidden border border-[#2A2A2A]">
-                    <div className="bg-[#0F0F0F] px-3 py-4"><p className="text-2xl font-extrabold gradient-text accent-num">62</p><p className="text-[11px] uppercase tracking-wider text-slate-500 mt-0.5">Rehab line items</p></div>
-                    <div className="bg-[#0F0F0F] px-3 py-4"><p className="text-2xl font-extrabold gradient-text accent-num">41</p><p className="text-[11px] uppercase tracking-wider text-slate-500 mt-0.5">Metro cost indexes</p></div>
-                    <div className="bg-[#0F0F0F] px-3 py-4"><p className="text-2xl font-extrabold gradient-text accent-num">9</p><p className="text-[11px] uppercase tracking-wider text-slate-500 mt-0.5">Exit scenarios</p></div>
-                    <div className="bg-[#0F0F0F] px-3 py-4"><p className="text-2xl font-extrabold gradient-text accent-num">20</p><p className="text-[11px] uppercase tracking-wider text-slate-500 mt-0.5">Scoring metrics</p></div>
-                </div>
-            </section>
-            {recent.length>0&&(
-                <section className="max-w-5xl mx-auto px-4">
-                    <h2 className="text-xs uppercase tracking-wider text-slate-400 mb-3">Recent Saved Deals</h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        {recent.map(d=>(
-                            <button key={d.id} onClick={()=>{window.dispatchEvent(new CustomEvent('loadDeal',{detail:d}));onChangeView(View.RehabEstimator);}} className="text-left bg-[#1A1A1A] hover:bg-[#222] border border-[#2A2A2A] hover:border-amber-500 rounded-xl p-4 transition">
-                                <p className="font-bold text-white truncate">{d.name}</p>
-                                <p className="text-xs text-slate-500 truncate mb-2">{d.address||'No address'}</p>
-                                <div className="grid grid-cols-2 gap-1 text-xs"><div><p className="text-slate-500">ARV</p><p className="text-white accent-num">{formatCurrencySimple(d.arvNum||parseFloat(d.arv)||0)}</p></div><div><p className="text-slate-500">Profit</p><p className="text-amber-400 accent-num">{formatCurrencySimple(d.netProfit||0)}</p></div></div>
-                            </button>
-                        ))}
-                    </div>
+        <div className="max-w-7xl mx-auto px-4 py-8 eo-stagger">
+            <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
+                <div><p className="text-xs uppercase tracking-widest text-amber-400">{today}</p><h1 className="text-3xl font-extrabold headline text-white mt-1">Welcome back</h1></div>
+                <button onClick={handleNew} className="fire-bg text-black font-extrabold uppercase tracking-wider px-6 py-3.5 rounded-lg headline hover:opacity-90">+ Start a new deal</button>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+                <Kpi n={kpis.n} l="Saved deals" />
+                <Kpi n={kpis.best>0?formatCurrencySimple(kpis.best):'\u2014'} l="Best profit" />
+                <Kpi n={kpis.n?kpis.avg:'\u2014'} l="Avg score" />
+                <Kpi n={kpis.buys} l="Buy-rated" />
+            </div>
+            <div className="grid lg:grid-cols-12 gap-6">
+                <section className="lg:col-span-8 bg-[#1A1A1A] border border-[#2A2A2A] rounded-2xl overflow-hidden">
+                    <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#2A2A2A]"><h2 className="text-sm uppercase tracking-wider text-slate-300 headline">Pipeline</h2><span className="text-xs text-slate-500">{kpis.n} {kpis.n===1?'deal':'deals'}</span></div>
+                    {scored.length===0?(
+                        <div className="text-center py-16 px-6"><div className="w-14 h-14 rounded-full bg-[#0F0F0F] border border-[#2A2A2A] flex items-center justify-center mx-auto mb-4"><FolderOpen className="w-6 h-6 text-slate-600" /></div><p className="text-white font-semibold">No deals yet</p><p className="text-sm text-slate-500 mt-1 mb-5">Start your first deal and it will show up here.</p><button onClick={handleNew} className="fire-bg text-black font-bold uppercase tracking-wider px-5 py-2.5 rounded-lg text-sm hover:opacity-90">Start a new deal</button></div>
+                    ):(
+                        <div className="overflow-x-auto"><table className="w-full text-sm">
+                            <thead><tr className="text-[11px] uppercase tracking-wider text-slate-500 border-b border-[#2A2A2A]"><th className="text-left font-medium py-2.5 pl-5">Deal</th><th className="text-right font-medium">ARV</th><th className="text-right font-medium">Profit</th><th className="text-right font-medium">Score</th><th className="text-right font-medium pr-5">Verdict</th></tr></thead>
+                            <tbody>{scored.map(d=>(
+                                <tr key={d.id} onClick={()=>loadDeal(d)} className="border-b border-[#1f1f1f] hover:bg-[#202020] cursor-pointer">
+                                    <td className="py-3 pl-5"><p className="font-semibold text-white truncate max-w-[240px]">{d.name}</p><p className="text-xs text-slate-500 truncate max-w-[240px]">{d.address||'No address'}</p></td>
+                                    <td className="text-right accent-num text-slate-200 whitespace-nowrap">{formatCurrencySimple(d.arvNum||parseFloat(d.arv)||0)}</td>
+                                    <td className={`text-right accent-num whitespace-nowrap ${(d.netProfit||0)>=0?'text-amber-400':'text-red-400'}`}>{formatCurrencySimple(d.netProfit||0)}</td>
+                                    <td className="text-right accent-num text-slate-200">{d._score.toFixed(0)}</td>
+                                    <td className="text-right pr-5"><span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${chip(d._verdict)}`}>{d._verdict}</span></td>
+                                </tr>))}
+                            </tbody>
+                        </table></div>
+                    )}
                 </section>
-            )}
-            <section className="max-w-6xl mx-auto px-4">
-                <div className="flex items-center justify-between mb-4"><h2 className="text-xs uppercase tracking-wider text-slate-400">4 Stage Underwriting Workflow</h2><span className="text-xs text-slate-600 hidden sm:inline">Click any stage to jump in</span></div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 eo-stagger">
-                    {stages.map((s,i)=>(
-                        <button key={s.name} onClick={()=>onChangeView(s.view)} className="stage-card text-left bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl p-5 group focus-visible:outline-none focus-visible:border-amber-500">
-                            <div className="flex items-center justify-between mb-3"><div className="w-9 h-9 rounded-lg fire-bg flex items-center justify-center"><s.icon className="w-4 h-4 text-black" /></div><span className="text-2xl font-extrabold accent-num text-[#2A2A2A] group-hover:text-amber-500/50 transition-colors">{String(i+1).padStart(2,'0')}</span></div>
-                            <div className="flex items-center gap-1.5"><p className="font-bold text-white headline">{s.name}</p><ChevronDown className="w-4 h-4 text-amber-400 -rotate-90 opacity-0 group-hover:opacity-100 transition-opacity" /></div>
-                            <p className="text-xs text-slate-400 mt-1 leading-relaxed">{s.desc}</p>
-                        </button>
-                    ))}
-                </div>
-            </section>
-            <section className="max-w-3xl mx-auto px-4 py-7 rounded-xl bg-[#0F0F0F] border border-[#262626]">
-                <p className="text-lg text-white leading-relaxed text-center">Most flippers eyeball deals and lose money on the buy. This tool forces every assumption through four layers of math before you sign anything.</p>
-                <p className="text-base text-amber-400 italic text-center mt-3 headline">You make money on the purchase. The score tells you if you did.</p>
-            </section>
+                <aside className="lg:col-span-4 space-y-4">
+                    {(resume||hasCurrent)&&(<div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-2xl p-5"><p className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">Resume</p><p className="font-semibold text-white truncate">{resume?resume.name:(deal.address||'Current deal')}</p><p className="text-xs text-slate-500 truncate mb-4">{resume?(resume.address||'No address'):(deal.address||'In progress')}</p><button onClick={()=>resume?loadDeal(resume):onChangeView(View.RehabEstimator)} className="w-full fire-bg text-black font-bold uppercase tracking-wider py-2.5 rounded-lg text-sm hover:opacity-90">Continue</button></div>)}
+                    <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-2xl p-5">
+                        <p className="text-[11px] uppercase tracking-wider text-slate-500 mb-3">Workflow</p>
+                        {stages.map((st,i)=>(<button key={st.name} onClick={()=>onChangeView(st.view)} className="w-full flex items-center gap-3 py-2 group text-left"><div className="w-7 h-7 rounded-lg fire-bg text-black flex items-center justify-center font-extrabold accent-num text-xs flex-shrink-0">{i+1}</div><span className="text-sm text-slate-200 group-hover:text-white">{st.name}</span><ChevronDown className="w-4 h-4 text-amber-400 -rotate-90 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" /></button>))}
+                    </div>
+                    <div className="bg-[#0F0F0F] border border-[#262626] rounded-2xl p-5"><div className="grid grid-cols-2 gap-3 text-center">
+                        <div><p className="accent-num text-lg font-extrabold gradient-text">62</p><p className="text-[10px] uppercase tracking-wider text-slate-500">Rehab items</p></div>
+                        <div><p className="accent-num text-lg font-extrabold gradient-text">41</p><p className="text-[10px] uppercase tracking-wider text-slate-500">Metros</p></div>
+                        <div><p className="accent-num text-lg font-extrabold gradient-text">9</p><p className="text-[10px] uppercase tracking-wider text-slate-500">Scenarios</p></div>
+                        <div><p className="accent-num text-lg font-extrabold gradient-text">20</p><p className="text-[10px] uppercase tracking-wider text-slate-500">Metrics</p></div>
+                    </div></div>
+                </aside>
+            </div>
         </div>
     );
 };
@@ -1206,16 +1205,16 @@ const Header = ({currentView,onChangeView,onOpenPipeline}) => {
             <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
                 <button onClick={()=>onChangeView(View.Home)} className="flex items-center gap-2 flex-shrink-0 hover:opacity-80">
                     <img src="https://storage.googleapis.com/msgsndr/zQh0YM3EIsWgcjMDTSSC/media/68c95d8f7505d3a75a7fabd2.png" alt="Unshakable Investor" className="h-8 w-auto" />
-                    <span className="font-extrabold headline text-lg gradient-text hidden md:inline">UNSHAKABLE</span>
+                    <span className="font-extrabold headline text-lg gradient-text hidden md:inline">Essential Analyzer</span>
                 </button>
                 <div className="hidden lg:flex items-center gap-1">{tabs.map(t=>(<button key={t.id} onClick={()=>onChangeView(t.id)} className={`nav-button flex items-center gap-2 px-3 py-2 rounded text-sm font-semibold relative ${currentView===t.id?'active':'text-slate-300 hover:bg-[#1A1A1A]'}`}><t.Icon className="w-4 h-4" /> {t.label}{completion[t.id]&&currentView!==t.id&&<span className="w-2 h-2 rounded-full bg-emerald-400 absolute -top-0.5 -right-0.5"></span>}</button>))}</div>
                 <div className="flex items-center gap-2">
-                    <button onClick={onOpenPipeline} className="icon-btn p-2 rounded hover:bg-[#1A1A1A] relative" aria-label="Your profile and saved deals">
-                        <User className="w-5 h-5 text-amber-400" />
+                    <button onClick={onOpenPipeline} className="icon-btn p-2.5 rounded hover:bg-[#1A1A1A] relative" aria-label="Your profile and saved deals">
+                        <User className="w-6 h-6 text-amber-400" />
                         {deals.length>0&&<span className="absolute -top-1 -right-1 bg-amber-500 text-black text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center accent-num">{deals.length}</span>}
                     </button>
-                    <button onClick={handleShare} className="icon-btn p-2 rounded hover:bg-[#1A1A1A]" aria-label="Share"><Share2 className="w-5 h-5 text-amber-400" /></button>
-                    <button onClick={()=>supabase.auth.signOut()} className="icon-btn p-2 rounded hover:bg-[#1A1A1A]" aria-label="Sign out"><LogOut className="w-5 h-5 text-slate-400" /></button>
+                    <button onClick={handleShare} className="icon-btn p-2.5 rounded hover:bg-[#1A1A1A]" aria-label="Share"><Share2 className="w-6 h-6 text-amber-400" /></button>
+                    <button onClick={()=>supabase.auth.signOut()} className="icon-btn p-2.5 rounded hover:bg-[#1A1A1A]" aria-label="Sign out"><LogOut className="w-6 h-6 text-slate-400" /></button>
                 </div>
             </div>
         </nav>
