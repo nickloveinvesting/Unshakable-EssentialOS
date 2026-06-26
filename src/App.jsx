@@ -802,7 +802,7 @@ const HomePage = ({onChangeView}) => {
     ];
     return (
         <div className="space-y-10 py-6">
-            <section className="text-center max-w-3xl mx-auto px-4">
+            <section className="text-center max-w-3xl mx-auto px-4 eo-stagger">
                 <p className="text-sm uppercase tracking-widest text-amber-400 mb-3">The Unshakable Investor</p>
                 <h1 className="text-5xl sm:text-6xl font-extrabold headline gradient-text leading-tight">The Deal Analyzer</h1>
                 <p className="text-lg sm:text-xl text-slate-300 mt-4">Underwrite a fix and flip in 8 minutes. Score it before you sign.</p>
@@ -833,7 +833,7 @@ const HomePage = ({onChangeView}) => {
             )}
             <section className="max-w-6xl mx-auto px-4">
                 <div className="flex items-center justify-between mb-4"><h2 className="text-xs uppercase tracking-wider text-slate-400">4 Stage Underwriting Workflow</h2><span className="text-xs text-slate-600 hidden sm:inline">Click any stage to jump in</span></div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 eo-stagger">
                     {stages.map((s,i)=>(
                         <button key={s.name} onClick={()=>onChangeView(s.view)} className="stage-card text-left bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl p-5 group focus-visible:outline-none focus-visible:border-amber-500">
                             <div className="flex items-center justify-between mb-3"><div className="w-9 h-9 rounded-lg fire-bg flex items-center justify-center"><s.icon className="w-4 h-4 text-black" /></div><span className="text-2xl font-extrabold accent-num text-[#2A2A2A] group-hover:text-amber-500/50 transition-colors">{String(i+1).padStart(2,'0')}</span></div>
@@ -843,8 +843,8 @@ const HomePage = ({onChangeView}) => {
                     ))}
                 </div>
             </section>
-            <section className="max-w-3xl mx-auto px-4 py-8 fire-border rounded-xl bg-[#0F0F0F]">
-                <p className="text-lg text-white leading-relaxed text-center">Most flippers eyeball deals and lose money on the buy. This tool forces every assumption through five layers of math before you sign anything.</p>
+            <section className="max-w-3xl mx-auto px-4 py-7 rounded-xl bg-[#0F0F0F] border border-[#262626]">
+                <p className="text-lg text-white leading-relaxed text-center">Most flippers eyeball deals and lose money on the buy. This tool forces every assumption through four layers of math before you sign anything.</p>
                 <p className="text-base text-amber-400 italic text-center mt-3 headline">You make money on the purchase. The score tells you if you did.</p>
             </section>
         </div>
@@ -1167,6 +1167,24 @@ const AppInner = ({currentView,setCurrentView,pipelineOpen,setPipelineOpen}) => 
     return (<><Header currentView={currentView} onChangeView={setCurrentView} onOpenPipeline={()=>setPipelineOpen(true)} /><AppShell currentView={currentView} onChangeView={setCurrentView} /><MobileBottomTabBar currentView={currentView} onChangeView={setCurrentView} /><PipelineDrawer open={pipelineOpen} onClose={()=>setPipelineOpen(false)} onLoadDeal={handleLoadDeal} /></>);
 };
 
+const LOGO_URL='https://storage.googleapis.com/msgsndr/zQh0YM3EIsWgcjMDTSSC/media/68c95d8f7505d3a75a7fabd2.png';
+
+const BrandLoader = ({label='Preparing your deal analyzer'}) => (
+    <div className="min-h-dvh home-hero flex flex-col items-center justify-center gap-6 px-4">
+        <div className="relative w-20 h-20 flex items-center justify-center">
+            <div className="eo-ring absolute inset-0 rounded-full"></div>
+            <img src={LOGO_URL} alt="" className="w-9 h-9 object-contain" style={{animation:'eo_pulse 1.8s ease-in-out infinite'}} />
+        </div>
+        <div className="text-center">
+            <p className="headline gradient-text font-extrabold text-lg tracking-tight">EssentialOS</p>
+            <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500 mt-1.5">{label}</p>
+            <div className="mt-4 mx-auto w-40 h-[3px] rounded-full bg-[#161616] overflow-hidden relative">
+                <span className="absolute inset-y-0 left-0 w-2/5 fire-bg rounded-full" style={{animation:'eo_shimmer 1.15s ease-in-out infinite'}}></span>
+            </div>
+        </div>
+    </div>
+);
+
 const LoginScreen = () => {
     const [mode,setMode]=useState('signin');
     const [email,setEmail]=useState('');
@@ -1175,21 +1193,42 @@ const LoginScreen = () => {
     const [err,setErr]=useState('');
     const [msg,setMsg]=useState('');
     const submit=async(e)=>{e.preventDefault();setErr('');setMsg('');setBusy(true);try{if(mode==='signin'){const {error}=await supabase.auth.signInWithPassword({email,password});if(error)throw error;}else{const {error}=await supabase.auth.signUp({email,password});if(error)throw error;setMsg('Account created. If confirmation is required, check your email, then sign in.');setMode('signin');}}catch(e){setErr(e.message||'Something went wrong');}finally{setBusy(false);}};
-    return (<div className="min-h-dvh flex items-center justify-center px-4 home-hero">
-        <div className="w-full max-w-md">
-            <div className="text-center mb-6"><img src="https://storage.googleapis.com/msgsndr/zQh0YM3EIsWgcjMDTSSC/media/68c95d8f7505d3a75a7fabd2.png" alt="Unshakable Investor" className="h-10 w-auto mx-auto mb-4" /><h1 className="text-3xl font-extrabold headline gradient-text">EssentialOS</h1><p className="text-sm text-slate-400 mt-1">The Unshakable Deal Analyzer</p></div>
-            <form onSubmit={submit} className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl p-6 space-y-4">
-                <h2 className="text-lg font-bold text-white headline">{mode==='signin'?'Sign in':'Create account'}</h2>
-                <div><label className="text-xs uppercase text-slate-400">Email</label><div className="relative mt-1"><Mail className="w-4 h-4 text-slate-500 absolute left-3 top-3" /><input type="email" required value={email} onChange={(e)=>setEmail(e.target.value)} placeholder="you@email.com" className="w-full pl-9 pr-3 py-2.5 rounded" /></div></div>
-                <div><label className="text-xs uppercase text-slate-400">Password</label><div className="relative mt-1"><Lock className="w-4 h-4 text-slate-500 absolute left-3 top-3" /><input type="password" required minLength={6} value={password} onChange={(e)=>setPassword(e.target.value)} placeholder="At least 6 characters" className="w-full pl-9 pr-3 py-2.5 rounded" /></div></div>
-                {err&&<p className="text-xs text-red-400">{err}</p>}
-                {msg&&<p className="text-xs text-emerald-400">{msg}</p>}
-                <button type="submit" disabled={busy} className="w-full fire-bg text-black font-extrabold uppercase tracking-wider py-3 rounded-lg headline hover:opacity-90 disabled:opacity-60">{busy?'Please wait...':(mode==='signin'?'Sign in':'Create account')}</button>
-                <p className="text-xs text-slate-500 text-center">{mode==='signin'?'Need access?':'Already have access?'} <button type="button" onClick={()=>{setErr('');setMsg('');setMode(mode==='signin'?'signup':'signin');}} className="text-amber-400 hover:underline">{mode==='signin'?'Create account':'Sign in'}</button></p>
-            </form>
-            <p className="text-center text-xs text-slate-600 mt-4">Your saved deals sync securely to your account.</p>
+    const features=[
+        {Icon:Construction,t:'62-item rehab estimator',d:'Metro-adjusted to your market'},
+        {Icon:Compass,t:'9 exit scenarios',d:'Wholesale, rental, or flip'},
+        {Icon:DollarSign,t:'5 financing stacks',d:'Compared side by side'},
+        {Icon:Award,t:'20-metric deal score',d:'A clear buy, wait, or kill'}
+    ];
+    return (
+        <div className="min-h-dvh home-hero flex items-center justify-center px-5 py-10">
+            <div className="w-full max-w-5xl grid lg:grid-cols-2 gap-12 items-center">
+                <div className="hidden lg:flex flex-col eo-stagger">
+                    <div className="flex items-center gap-3 mb-9"><img src={LOGO_URL} alt="Unshakable Investor" className="h-9 w-auto" /><span className="headline gradient-text font-extrabold text-xl tracking-tight">UNSHAKABLE</span></div>
+                    <h1 className="headline text-white font-extrabold text-4xl xl:text-5xl leading-[1.08]">Underwrite a flip<br /><span className="gradient-text">before you sign.</span></h1>
+                    <p className="text-slate-400 mt-5 max-w-md leading-relaxed">EssentialOS runs every assumption through four layers of math, then scores the deal so you know whether to buy, wait, or kill — in minutes.</p>
+                    <div className="mt-9 space-y-3.5 max-w-md">
+                        {features.map(f=>(<div key={f.t} className="flex items-start gap-3"><div className="w-9 h-9 rounded-lg bg-[#161616] border border-[#262626] flex items-center justify-center flex-shrink-0"><f.Icon className="w-4 h-4 text-amber-400" /></div><div><p className="text-white text-sm font-semibold leading-tight">{f.t}</p><p className="text-slate-500 text-xs mt-0.5">{f.d}</p></div></div>))}
+                    </div>
+                </div>
+                <div className="w-full max-w-md mx-auto lg:mx-0 eo-stagger">
+                    <div className="lg:hidden flex items-center justify-center gap-2.5 mb-7"><img src={LOGO_URL} alt="Unshakable Investor" className="h-9 w-auto" /><span className="headline gradient-text font-extrabold text-lg tracking-tight">EssentialOS</span></div>
+                    <form onSubmit={submit} className="bg-[#141414] border border-[#262626] rounded-2xl p-7 shadow-2xl">
+                        <h2 className="headline text-white font-extrabold text-2xl tracking-tight">{mode==='signin'?'Welcome back':'Create your account'}</h2>
+                        <p className="text-slate-500 text-sm mt-1.5 mb-6">{mode==='signin'?'Sign in to your deal pipeline.':'Start saving and scoring deals.'}</p>
+                        <div className="space-y-4">
+                            <div><label className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Email</label><div className="relative mt-1.5"><Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" /><input type="email" required value={email} onChange={(e)=>setEmail(e.target.value)} placeholder="you@email.com" className="w-full pl-10 pr-3 py-3 text-sm" /></div></div>
+                            <div><label className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Password</label><div className="relative mt-1.5"><Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" /><input type="password" required minLength={6} value={password} onChange={(e)=>setPassword(e.target.value)} placeholder="••••••••" className="w-full pl-10 pr-3 py-3 text-sm" /></div></div>
+                        </div>
+                        {err&&<p className="text-xs text-red-400 mt-3 flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />{err}</p>}
+                        {msg&&<p className="text-xs text-emerald-400 mt-3">{msg}</p>}
+                        <button type="submit" disabled={busy} className="w-full fire-bg text-black font-extrabold uppercase tracking-wider py-3.5 rounded-lg headline hover:opacity-90 disabled:opacity-60 transition-opacity mt-5 flex items-center justify-center gap-2">{busy?(<><span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full" style={{animation:'eo_spin .7s linear infinite'}}></span>Please wait</>):(mode==='signin'?'Sign in':'Create account')}</button>
+                        <p className="text-xs text-slate-500 text-center mt-5">{mode==='signin'?'Need access?':'Already have access?'} <button type="button" onClick={()=>{setErr('');setMsg('');setMode(mode==='signin'?'signup':'signin');}} className="text-amber-400 hover:underline font-semibold">{mode==='signin'?'Create account':'Sign in'}</button></p>
+                    </form>
+                    <p className="text-center text-xs text-slate-600 mt-5">Your saved deals sync securely to your account.</p>
+                </div>
+            </div>
         </div>
-    </div>);
+    );
 };
 
 const AuthedApp = () => {
@@ -1201,7 +1240,7 @@ const AuthedApp = () => {
 const AuthGate = () => {
     const [session,setSession]=useState(undefined);
     useEffect(()=>{supabase.auth.getSession().then(({data})=>setSession(data.session));const {data:sub}=supabase.auth.onAuthStateChange((_e,s)=>setSession(s));return ()=>sub.subscription.unsubscribe();},[]);
-    if(session===undefined)return (<div className="min-h-dvh flex items-center justify-center home-hero"><div className="w-12 h-12 rounded-full border-4 border-[#2A2A2A] border-t-amber-400 animate-spin"></div></div>);
+    if(session===undefined)return <BrandLoader />;
     if(!session)return <LoginScreen />;
     return <AuthedApp />;
 };
