@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef, useContext, createContext } from 'react';
-import { Construction, TrendingUp, Inbox, SlidersHorizontal, Landmark, BarChart2, Table, Mail, Info, ChevronDown, Bookmark, Share2, Save, Printer, Download, Trash2, X, Calculator, Sparkles, FolderOpen, Edit3, FileText, Calendar, Target, Award, AlertTriangle, CheckCircle, CheckCircle2, Clock, DollarSign, Layers, Activity, Shield, Zap, Compass, MapPin, Home, Trophy, Check, LogOut, Lock } from 'lucide-react';
+import { Construction, TrendingUp, Inbox, SlidersHorizontal, Landmark, BarChart2, Table, Mail, Info, ChevronDown, Bookmark, Share2, Save, Printer, Download, Trash2, X, Calculator, Sparkles, FolderOpen, Edit3, FileText, Calendar, Target, Award, AlertTriangle, CheckCircle, CheckCircle2, Clock, DollarSign, Layers, Activity, Shield, Zap, Compass, MapPin, Home, Trophy, Check, LogOut, Lock, User } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 const SUPABASE_URL=import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY=import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -754,6 +754,9 @@ const DealSnapshotRail = () => {
 const PipelineDrawer = ({open,onClose,onLoadDeal}) => {
     const {deals,deleteDeal}=useSavedDealsContext();
     const toast=useToast();
+    const [email,setEmail]=useState('');
+    useEffect(()=>{if(open){supabase.auth.getUser().then(({data})=>setEmail(data?.user?.email||''));}},[open]);
+    const initial=(email||'?').trim().charAt(0).toUpperCase()||'?';
     const handleExportCSV=()=>{
         if(deals.length===0){toast?.show('No deals to export');return;}
         const headers=['Name','Address','ARV','Purchase','Rehab','Net Profit','ROI %','Saved At'];
@@ -767,12 +770,17 @@ const PipelineDrawer = ({open,onClose,onLoadDeal}) => {
     return (
         <>
             <div className={`drawer-backdrop ${open?'open':''}`} onClick={onClose} />
-            <aside className={`drawer-panel ${open?'open':''}`} role="dialog" aria-label="Saved deals">
-                <header className="p-4 border-b border-[#2A2A2A] flex items-center justify-between"><h2 className="text-lg font-bold headline gradient-text">Pipeline</h2><button onClick={onClose} className="icon-btn p-2 rounded hover:bg-[#0F0F0F]" aria-label="Close drawer"><X className="w-5 h-5" /></button></header>
-                <div className="p-4 border-b border-[#2A2A2A] flex gap-2"><button onClick={handleExportCSV} className="text-xs bg-[#0F0F0F] hover:bg-[#222] text-white px-3 py-1.5 rounded flex items-center gap-1.5"><Download className="w-3.5 h-3.5" /> Export CSV</button></div>
+            <aside className={`drawer-panel ${open?'open':''}`} role="dialog" aria-label="Your profile">
+                <header className="p-4 border-b border-[#2A2A2A] flex items-center justify-between"><h2 className="text-lg font-bold headline gradient-text">Your Profile</h2><button onClick={onClose} className="icon-btn p-2 rounded hover:bg-[#0F0F0F]" aria-label="Close"><X className="w-5 h-5" /></button></header>
+                <div className="p-4 border-b border-[#2A2A2A] flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-full fire-bg flex items-center justify-center text-black font-extrabold headline text-lg flex-shrink-0">{initial}</div>
+                    <div className="min-w-0 flex-1"><p className="text-sm text-white font-semibold truncate">{email||'Signed in'}</p><p className="text-xs text-slate-500">{deals.length} saved {deals.length===1?'deal':'deals'}</p></div>
+                    <button onClick={()=>supabase.auth.signOut()} className="text-xs text-slate-400 hover:text-white border border-[#2A2A2A] hover:border-[#3A3A3A] rounded px-2.5 py-1.5 flex items-center gap-1.5 flex-shrink-0"><LogOut className="w-3.5 h-3.5" /> Sign out</button>
+                </div>
+                <div className="p-4 border-b border-[#2A2A2A] flex items-center justify-between"><h3 className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Saved Deals</h3><button onClick={handleExportCSV} className="text-xs bg-[#0F0F0F] hover:bg-[#222] text-white px-3 py-1.5 rounded flex items-center gap-1.5"><Download className="w-3.5 h-3.5" /> Export CSV</button></div>
                 <div className="flex-1 overflow-auto p-4 space-y-2">
-                    {deals.length===0?(<p className="text-sm text-slate-500 text-center py-8">No saved deals yet. Build a deal and click Save.</p>):deals.map(d=>(
-                        <div key={d.id} className="bg-[#0F0F0F] rounded-lg p-3 border border-[#2A2A2A]">
+                    {deals.length===0?(<div className="text-center py-12"><div className="w-12 h-12 rounded-full bg-[#0F0F0F] border border-[#2A2A2A] flex items-center justify-center mx-auto mb-3"><FolderOpen className="w-5 h-5 text-slate-600" /></div><p className="text-sm text-slate-400 font-medium">No saved deals yet</p><p className="text-xs text-slate-600 mt-1">Build a deal and hit Save to see it here.</p></div>):deals.map(d=>(
+                        <div key={d.id} className="bg-[#0F0F0F] rounded-lg p-3 border border-[#2A2A2A] hover:border-[#3A3A3A] transition-colors">
                             <div className="flex items-start justify-between gap-2">
                                 <div className="min-w-0 flex-1"><p className="font-semibold text-white truncate">{d.name}</p><p className="text-xs text-slate-500 truncate">{d.address||'No address'}</p></div>
                                 <div className="flex gap-1"><button onClick={()=>onLoadDeal(d)} className="p-1.5 rounded hover:bg-[#1A1A1A]" aria-label="Load deal"><FolderOpen className="w-4 h-4 text-amber-400" /></button><button onClick={()=>handleDelete(d.id,d.name)} className="p-1.5 rounded hover:bg-[#1A1A1A]" aria-label="Delete deal"><Trash2 className="w-4 h-4 text-red-400" /></button></div>
@@ -1123,8 +1131,8 @@ const Header = ({currentView,onChangeView,onOpenPipeline}) => {
                 </button>
                 <div className="hidden lg:flex items-center gap-1">{tabs.map(t=>(<button key={t.id} onClick={()=>onChangeView(t.id)} className={`nav-button flex items-center gap-2 px-3 py-2 rounded text-sm font-semibold relative ${currentView===t.id?'active':'text-slate-300 hover:bg-[#1A1A1A]'}`}><t.Icon className="w-4 h-4" /> {t.label}{completion[t.id]&&currentView!==t.id&&<span className="w-2 h-2 rounded-full bg-emerald-400 absolute -top-0.5 -right-0.5"></span>}</button>))}</div>
                 <div className="flex items-center gap-2">
-                    <button onClick={onOpenPipeline} className="icon-btn p-2 rounded hover:bg-[#1A1A1A] relative" aria-label="Pipeline">
-                        <Bookmark className="w-5 h-5 text-amber-400" />
+                    <button onClick={onOpenPipeline} className="icon-btn p-2 rounded hover:bg-[#1A1A1A] relative" aria-label="Your profile and saved deals">
+                        <User className="w-5 h-5 text-amber-400" />
                         {deals.length>0&&<span className="absolute -top-1 -right-1 bg-amber-500 text-black text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center accent-num">{deals.length}</span>}
                     </button>
                     <button onClick={handleShare} className="icon-btn p-2 rounded hover:bg-[#1A1A1A]" aria-label="Share"><Share2 className="w-5 h-5 text-amber-400" /></button>
