@@ -79,3 +79,16 @@ input:disabled,button:disabled{background-color:#1A1A1A !important;cursor:not-al
 .eo-stagger>*:nth-child(6){animation-delay:.44s}
 .eo-ring{background:conic-gradient(from 0deg,#FFD700,#FFA500,#FF4500,rgba(255,69,0,0) 78%);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 4px));mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 4px));animation:eo_spin .9s linear infinite}
 @media (prefers-reduced-motion: reduce){.eo-stagger>*{opacity:1;animation:none}.eo-ring{animation:none}[style*="eo_pulse"],[style*="eo_shimmer"]{animation:none!important}}
+
+/* Fix browser autofill rendering white-on-white: keep dark field + white text */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+select:-webkit-autofill{
+  -webkit-text-fill-color:#FFFFFF;
+  caret-color:#FFFFFF;
+  -webkit-box-shadow:0 0 0 1000px #1A1A1A inset;
+  box-shadow:0 0 0 1000px #1A1A1A inset;
+  transition:background-color 9999s ease-in-out 0s;
+}
