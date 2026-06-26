@@ -480,7 +480,7 @@ const computeStrategyScenarios = (deal) => {
     const whole_conservative={strategy:'wholesale',subScenario:'conservative',label:'Conservative',assumptions:'2 to 3% assignment fee, 30-day close',assignmentFee:arv*0.025,cashRequired:500,timeToClose:30,risk:1};
     const userRent=parseFloat(deal.estimatedRent)||metroRent;
     const annualRent_market=userRent*12;
-    const noi_market=annualRent_market-annualRent_market*0.40;
+    const noi_market=annualRent_market*0.95-annualRent_market*0.40;
     const totalCost=purchase+rehab+(purchase*0.03);
     const dscrLtv=FINANCING_DEFAULTS_2026.dscr.ltvCashOutRefi;
     const dscrRate=FINANCING_DEFAULTS_2026.dscr.rate;
@@ -719,6 +719,15 @@ const SavedDealsProvider = ({children}) => {
 };
 const useSavedDealsContext = () => useContext(SavedDealsContext);
 
+const SettingsContext = createContext(null);
+const SettingsProvider = ({children}) => {
+    const [settings,setSettings]=useState(null);
+    useEffect(()=>{let active=true;(async()=>{const {data:{user}}=await supabase.auth.getUser();if(!user)return;let {data}=await supabase.from('user_settings').select('*').eq('user_id',user.id).maybeSingle();if(!data){const def={user_id:user.id,cash_available:100000,credit_tier:'1-3deals',target_assignment_fee:15000};const ins=await supabase.from('user_settings').insert(def).select().single();data=ins.data||def;}if(active)setSettings(data);})();return ()=>{active=false;};},[]);
+    const updateSettings=useCallback((patch)=>{setSettings(p=>({...(p||{}),...patch}));(async()=>{const {data:{user}}=await supabase.auth.getUser();if(!user)return;await supabase.from('user_settings').update({...patch,updated_at:new Date().toISOString()}).eq('user_id',user.id);})();},[]);
+    return <SettingsContext.Provider value={{settings,updateSettings}}>{children}</SettingsContext.Provider>;
+};
+const useSettings = () => useContext(SettingsContext)||{settings:null,updateSettings:()=>{}};
+
 const useZipMarket = (zip) => {
     const [row,setRow]=useState(null);
     const [loading,setLoading]=useState(false);
@@ -816,6 +825,7 @@ const DealSnapshotRail = () => {
 
 const PipelineDrawer = ({open,onClose,onLoadDeal}) => {
     const {deals,deleteDeal}=useSavedDealsContext();
+    const {settings,updateSettings}=useSettings();
     const toast=useToast();
     const [email,setEmail]=useState('');
     useEffect(()=>{if(open){supabase.auth.getUser().then(({data})=>setEmail(data?.user?.email||''));}},[open]);
@@ -839,6 +849,15 @@ const PipelineDrawer = ({open,onClose,onLoadDeal}) => {
                     <div className="w-11 h-11 rounded-full fire-bg flex items-center justify-center text-black font-extrabold headline text-lg flex-shrink-0">{initial}</div>
                     <div className="min-w-0 flex-1"><p className="text-sm text-white font-semibold truncate">{email||'Signed in'}</p><p className="text-xs text-slate-500">{deals.length} saved {deals.length===1?'deal':'deals'}</p></div>
                     <button onClick={()=>supabase.auth.signOut()} className="text-xs text-slate-400 hover:text-white border border-[#2A2A2A] hover:border-[#3A3A3A] rounded px-2.5 py-1.5 flex items-center gap-1.5 flex-shrink-0"><LogOut className="w-3.5 h-3.5" /> Sign out</button>
+                </div>
+                <div className="p-4 border-b border-[#2A2A2A]">
+                    <h3 className="text-xs uppercase tracking-wider text-slate-400 font-semibold mb-3">Investor Settings</h3>
+                    <div className="space-y-3">
+                        <div><label className="text-[11px] uppercase tracking-wider text-slate-500">Cash available</label><input type="number" value={settings?.cash_available??''} onChange={(e)=>updateSettings({cash_available:e.target.value===''?null:parseFloat(e.target.value)})} placeholder="100000" className="w-full px-3 py-2 rounded mt-1 text-sm" /></div>
+                        <div><label className="text-[11px] uppercase tracking-wider text-slate-500">Credit tier</label><div className="flex gap-1 mt-1 flex-wrap">{[{k:'firstTimer',l:'First-Timer'},{k:'1-3deals',l:'1-3'},{k:'3+deals',l:'3+'},{k:'10+deals',l:'10+'}].map(t=>(<button key={t.k} onClick={()=>updateSettings({credit_tier:t.k})} className={`text-xs px-2.5 py-1 rounded ${(settings?.credit_tier||'1-3deals')===t.k?'fire-bg text-black font-bold':'bg-[#0F0F0F] text-slate-300'}`}>{t.l}</button>))}</div></div>
+                        <div><label className="text-[11px] uppercase tracking-wider text-slate-500">Target wholesale fee</label><input type="number" value={settings?.target_assignment_fee??''} onChange={(e)=>updateSettings({target_assignment_fee:e.target.value===''?null:parseFloat(e.target.value)})} placeholder="15000" className="w-full px-3 py-2 rounded mt-1 text-sm" /></div>
+                    </div>
+                    <p className="text-[10px] text-slate-600 mt-2">Saved to your account and applied to every deal.</p>
                 </div>
                 <div className="p-4 border-b border-[#2A2A2A] flex items-center justify-between"><h3 className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Saved Deals</h3><button onClick={handleExportCSV} className="text-xs bg-[#0F0F0F] hover:bg-[#222] text-white px-3 py-1.5 rounded flex items-center gap-1.5"><Download className="w-3.5 h-3.5" /> Export CSV</button></div>
                 <div className="flex-1 overflow-auto p-4 space-y-2">
@@ -1036,16 +1055,13 @@ const StrategyAnalyzer = ({onChangeView}) => {
                     </div>
                 </div>
                 <div className="bg-[#1A1A1A] p-6 rounded-xl border border-[#2A2A2A]">
-                    <h2 className="text-xl font-bold headline gradient-text mb-4 flex items-center gap-2"><Compass className="w-5 h-5" /> Your Profile</h2>
+                    <h2 className="text-xl font-bold headline gradient-text mb-1 flex items-center gap-2"><Compass className="w-5 h-5" /> Deal Inputs</h2><p className="text-xs text-slate-500 mb-4">Cash, credit tier &amp; wholesale fee now live in your <span className="text-amber-400">Profile</span> (top-right).</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div><label className="text-xs uppercase text-slate-400">Cash Available</label><input type="number" value={deal.userCashAvailable} onChange={(e)=>updateDeal({userCashAvailable:e.target.value})} className="w-full px-3 py-2 rounded mt-1" /></div>
-                        <div><label className="text-xs uppercase text-slate-400">Credit Tier</label><div className="flex gap-1 mt-1 flex-wrap">{[{k:'firstTimer',l:'First-Timer'},{k:'1-3deals',l:'1-3 Deals'},{k:'3+deals',l:'3+ Deals'},{k:'10+deals',l:'10+ Deals'}].map(t=>(<button key={t.k} onClick={()=>updateDeal({creditTier:t.k})} className={`text-xs px-2 py-1 rounded ${deal.creditTier===t.k?'fire-bg text-black font-bold':'bg-[#0F0F0F] text-slate-300'}`}>{t.l}</button>))}</div></div>
                         <div><label className="text-xs uppercase text-slate-400">Risk Tolerance</label><div className="flex gap-1 mt-1">{['conservative','balanced','aggressive'].map(r=>(<button key={r} onClick={()=>updateDeal({riskTolerance:r})} className={`text-xs px-3 py-1 rounded capitalize ${deal.riskTolerance===r?'fire-bg text-black font-bold':'bg-[#0F0F0F] text-slate-300'}`}>{r}</button>))}</div></div>
                         <div><label className="text-xs uppercase text-slate-400">Estimated Rent (monthly)</label><input type="number" value={deal.estimatedRent} onChange={(e)=>updateDeal({estimatedRent:e.target.value})} placeholder="Auto from metro" className="w-full px-3 py-2 rounded mt-1" /></div>
                         <div><label className="text-xs uppercase text-slate-400">Seller Mortgage Balance</label><input type="number" value={deal.sellerMortgageBalance} onChange={(e)=>updateDeal({sellerMortgageBalance:e.target.value})} className="w-full px-3 py-2 rounded mt-1" /></div>
                         <div><label className="text-xs uppercase text-slate-400">Seller Rate %</label><input type="number" step="0.1" value={deal.sellerMortgageRate} onChange={(e)=>updateDeal({sellerMortgageRate:e.target.value})} className="w-full px-3 py-2 rounded mt-1" /></div>
                         <div className="sm:col-span-2 flex items-center gap-2"><input type="checkbox" id="fac" checked={!!deal.sellerFreeAndClear} onChange={(e)=>updateDeal({sellerFreeAndClear:e.target.checked})} className="w-4 h-4 accent-amber-500" /><label htmlFor="fac" className="text-sm text-slate-300">Property is free and clear</label></div>
-                        <div className="sm:col-span-2"><label className="text-xs uppercase text-slate-400">Target Assignment Fee (wholesale)</label><input type="number" value={deal.targetAssignmentFee} onChange={(e)=>updateDeal({targetAssignmentFee:e.target.value})} className="w-full px-3 py-2 rounded mt-1" /></div>
                     </div>
                 </div>
                 <div>
@@ -1230,10 +1246,13 @@ const AppShell = ({currentView,onChangeView}) => {
 
 const AppInner = ({currentView,setCurrentView,pipelineOpen,setPipelineOpen}) => {
     const {deal,updateDeal,replaceDeal}=useDeal();
+    const {settings}=useSettings();
+    const applySettings=(d)=>settings?{...d,userCashAvailable:settings.cash_available!=null?String(settings.cash_available):'',creditTier:settings.credit_tier||'1-3deals',targetAssignmentFee:settings.target_assignment_fee!=null?String(settings.target_assignment_fee):''}:d;
+    useEffect(()=>{if(settings){updateDeal({userCashAvailable:settings.cash_available!=null?String(settings.cash_available):'',creditTier:settings.credit_tier||'1-3deals',targetAssignmentFee:settings.target_assignment_fee!=null?String(settings.target_assignment_fee):''});}},[settings]);
     const autoSchedule=useMemo(()=>computeGanttSchedule(deal),[deal]);
     useEffect(()=>{let td=autoSchedule.totalDays;if(deal.selectedStrategy==='rental')td+=14;const nm=Math.max(Math.ceil(td/30),1);if(td!==deal.computedDurationDays){updateDeal({computedDurationDays:td,holdingPeriod:String(nm)});}},[autoSchedule.totalDays,deal.selectedStrategy]);
     const toast=useToast();
-    const handleLoadDeal=(ld)=>{replaceDeal(ld);setPipelineOpen(false);setCurrentView(View.RehabEstimator);toast?.show(`Loaded: ${ld.name||'deal'}`);};
+    const handleLoadDeal=(ld)=>{replaceDeal(applySettings(ld));setPipelineOpen(false);setCurrentView(View.RehabEstimator);toast?.show(`Loaded: ${ld.name||'deal'}`);};
     useEffect(()=>{const h=(e)=>handleLoadDeal(e.detail);window.addEventListener('loadDeal',h);return ()=>window.removeEventListener('loadDeal',h);},[]);
     return (<><Header currentView={currentView} onChangeView={setCurrentView} onOpenPipeline={()=>setPipelineOpen(true)} /><AppShell currentView={currentView} onChangeView={setCurrentView} /><MobileBottomTabBar currentView={currentView} onChangeView={setCurrentView} /><PipelineDrawer open={pipelineOpen} onClose={()=>setPipelineOpen(false)} onLoadDeal={handleLoadDeal} /></>);
 };
@@ -1305,7 +1324,7 @@ const LoginScreen = () => {
 const AuthedApp = () => {
     const [currentView,setCurrentView]=useState(View.Home);
     const [pipelineOpen,setPipelineOpen]=useState(false);
-    return (<DealProvider><SavedDealsProvider><AppInner currentView={currentView} setCurrentView={setCurrentView} pipelineOpen={pipelineOpen} setPipelineOpen={setPipelineOpen} /></SavedDealsProvider></DealProvider>);
+    return (<DealProvider><SettingsProvider><SavedDealsProvider><AppInner currentView={currentView} setCurrentView={setCurrentView} pipelineOpen={pipelineOpen} setPipelineOpen={setPipelineOpen} /></SavedDealsProvider></SettingsProvider></DealProvider>);
 };
 
 const AuthGate = () => {
