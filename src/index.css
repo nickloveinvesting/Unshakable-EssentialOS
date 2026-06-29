@@ -92,3 +92,5 @@ select:-webkit-autofill{
   box-shadow:0 0 0 1000px #1A1A1A inset;
   transition:background-color 9999s ease-in-out 0s;
 }
+
+html{scroll-behavior:smooth;}
