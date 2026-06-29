@@ -344,7 +344,7 @@ metroDisplay:'',metroMultiplier:1.0,metroRegion:'midwest',stateAbbr:'',
 selectedItems:{},itemQuantities:{},itemPercentages:{},selectedQualities:{},customItems:{},
 bathsToRemodel:'1',totalRehabCost:0,rehabEstimation:0,finalEstimation:0,
 arv:'',purchasePrice:'',targetProfit:'',
-ltv:'75',interestRate:'11',holdingPeriod:'6',extraCosts:[],
+ltv:'75',interestRate:'11',holdingPeriod:'6',loanPointsPct:'2',closingPct:'3',sellingPct:'7.5',taxAnnualPct:'1.1',holdMonthly:'250',holdMonthsOverride:'',extraCosts:[],
 selectedStrategy:'flip',selectedSubScenario:'market',
 userCashAvailable:'100000',creditTier:'1-3deals',riskTolerance:'balanced',
 sellerMortgageBalance:'',sellerMortgageRate:'',sellerFreeAndClear:false,
@@ -466,14 +466,15 @@ const computeGanttSchedule = (deal) => {
     return {tasks:sorted.map(t=>({...t,startDay:Math.ceil(t.earliestStart*crewMult),endDay:Math.ceil(t.earliestFinish*crewMult),isCritical:cp.has(t.trade)})),totalDays,crewWorkingDays,weekendGap,longestFabLag,criticalPath:Array.from(cp),startDate,endDate};
 };
 
-const flipNetProfit=(arv,purchase,rehab,months,ltv,rate)=>{const closingPurchase=purchase*0.03;const loanAmt=(purchase+rehab)*ltv;const monthlyHolding=(arv*0.011)/12+250;const finCost=loanAmt*(rate/12)*months;const holdingCost=monthlyHolding*months;const baseCost=purchase+rehab+finCost+closingPurchase+holdingCost;return arv-baseCost-arv*0.075;};
-const flipBaseInputs=(deal)=>{const arv=parseFloat(deal.arv)||0;const purchase=parseFloat(deal.purchasePrice)||0;const rehab=parseFloat(deal.finalEstimation)||parseFloat(deal.totalRehabCost)||computeRehabCost(deal).finalEstimation;const ltv=parseFloat(deal.ltv)/100||0.75;const rate=parseFloat(deal.interestRate)/100||0.11;const metroBM=METRO_BENCHMARKS[deal.metroDisplay]||NATIONAL_BENCHMARKS;const rehabMonths=getProjectMonths(deal).rehabMonths;const domDays=metroBM.medianDOM||55;const months=parseFloat(deal.holdMonthsOverride)>0?parseFloat(deal.holdMonthsOverride):(rehabMonths+domDays/30);return {arv,purchase,rehab,ltv,rate,months,domDays};};
-const computeSensitivity=(deal)=>{const {arv,purchase,rehab,ltv,rate,months}=flipBaseInputs(deal);const arvD=[-0.10,-0.05,0,0.05,0.10];const rehabD=[-0.20,-0.10,0,0.10,0.20];const holdD=[-1,0,1,2,3];const arvRehab=arvD.map(ad=>rehabD.map(rd=>flipNetProfit(arv*(1+ad),purchase,rehab*(1+rd),months,ltv,rate)));const arvHold=arvD.map(ad=>holdD.map(hd=>flipNetProfit(arv*(1+ad),purchase,rehab,Math.max(months+hd,1),ltv,rate)));return {arvD,rehabD,holdD,arvRehab,arvHold,base:flipNetProfit(arv,purchase,rehab,months,ltv,rate)};};
+const flipCfg=(deal)=>{const dn=(v,d)=>{const n=parseFloat(v);return isFinite(n)?n:d;};const pc=(v,d)=>{const n=parseFloat(v);return isFinite(n)?n/100:d;};return {ltv:dn(deal.ltv,75)/100,rate:dn(deal.interestRate,11)/100,pointsPct:pc(deal.loanPointsPct,0.02),closingPct:pc(deal.closingPct,0.03),sellingPct:pc(deal.sellingPct,0.075),taxAnnualPct:pc(deal.taxAnnualPct,1.1),holdMonthly:dn(deal.holdMonthly,250)};};
+const flipNetProfit=(arv,purchase,rehab,months,cfg)=>{const loanAmt=(purchase+rehab)*cfg.ltv;const financing=loanAmt*(cfg.rate/12)*months;const holding=((arv*cfg.taxAnnualPct)/12+cfg.holdMonthly)*months;const closing=purchase*cfg.closingPct;const selling=arv*cfg.sellingPct;return arv-purchase-rehab-financing-holding-closing-selling;};
+const flipBaseInputs=(deal)=>{const arv=parseFloat(deal.arv)||0;const purchase=parseFloat(deal.purchasePrice)||0;const rehab=parseFloat(deal.finalEstimation)||parseFloat(deal.totalRehabCost)||computeRehabCost(deal).finalEstimation;const cfg=flipCfg(deal);const metroBM=METRO_BENCHMARKS[deal.metroDisplay]||NATIONAL_BENCHMARKS;const rehabMonths=getProjectMonths(deal).rehabMonths;const domDays=metroBM.medianDOM||55;const months=parseFloat(deal.holdMonthsOverride)>0?parseFloat(deal.holdMonthsOverride):(rehabMonths+domDays/30);return {arv,purchase,rehab,cfg,ltv:cfg.ltv,rate:cfg.rate,months,domDays};};
+const computeSensitivity=(deal)=>{const {arv,purchase,rehab,months,cfg}=flipBaseInputs(deal);const arvD=[-0.10,-0.05,0,0.05,0.10];const rehabD=[-0.20,-0.10,0,0.10,0.20];const holdD=[-1,0,1,2,3];const arvRehab=arvD.map(ad=>rehabD.map(rd=>flipNetProfit(arv*(1+ad),purchase,rehab*(1+rd),months,cfg)));const arvHold=arvD.map(ad=>holdD.map(hd=>flipNetProfit(arv*(1+ad),purchase,rehab,Math.max(months+hd,1),cfg)));return {arvD,rehabD,holdD,arvRehab,arvHold,base:flipNetProfit(arv,purchase,rehab,months,cfg)};};
 const _tri=(min,mode,max)=>{if(max<=min)return min;const u=Math.random();const c=(mode-min)/(max-min);return u<c?min+Math.sqrt(u*(max-min)*(mode-min)):max-Math.sqrt((1-u)*(max-min)*(max-mode));};
 const _norm=()=>{let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);};
-const computeMonteCarlo=(deal,target)=>{const {arv,purchase,rehab,ltv,rate,months}=flipBaseInputs(deal);if(arv<=0||purchase<=0)return null;const N=8000;const arvSd=arv*0.06;const res=new Array(N);let pc=0,tc=0;for(let i=0;i<N;i++){let aArv=arv+_norm()*arvSd;if(aArv<arv*0.8)aArv=arv*0.8;const aRehab=_tri(rehab,rehab*1.05,rehab*1.30);const aMonths=_tri(months,months+0.5,months+2);const np=flipNetProfit(aArv,purchase,aRehab,aMonths,ltv,rate);res[i]=np;if(np>0)pc++;if(target>0&&np>=target)tc++;}res.sort((a,b)=>a-b);const pct=(p)=>res[Math.min(Math.floor(p*N),N-1)];const mean=res.reduce((a,b)=>a+b,0)/N;const min=res[0],max=res[N-1];const bins=24;const step=(max-min)/bins||1;const hist=new Array(bins).fill(0);res.forEach(r=>{let b=Math.floor((r-min)/step);if(b>=bins)b=bins-1;if(b<0)b=0;hist[b]++;});return {N,pProfit:pc/N,pTarget:target>0?tc/N:null,p10:pct(0.10),p50:pct(0.50),p90:pct(0.90),mean,min,max,step,hist};};
+const computeMonteCarlo=(deal,target)=>{const {arv,purchase,rehab,months,cfg}=flipBaseInputs(deal);if(arv<=0||purchase<=0)return null;const N=8000;const arvSd=arv*0.06;const res=new Array(N);let pc=0,tc=0;for(let i=0;i<N;i++){let aArv=arv+_norm()*arvSd;if(aArv<arv*0.8)aArv=arv*0.8;const aRehab=_tri(rehab,rehab*1.05,rehab*1.30);const aMonths=_tri(months,months+0.5,months+2);const np=flipNetProfit(aArv,purchase,aRehab,aMonths,cfg);res[i]=np;if(np>0)pc++;if(target>0&&np>=target)tc++;}res.sort((a,b)=>a-b);const pct=(p)=>res[Math.min(Math.floor(p*N),N-1)];const mean=res.reduce((a,b)=>a+b,0)/N;const min=res[0],max=res[N-1];const bins=24;const step=(max-min)/bins||1;const hist=new Array(bins).fill(0);res.forEach(r=>{let b=Math.floor((r-min)/step);if(b>=bins)b=bins-1;if(b<0)b=0;hist[b]++;});return {N,pProfit:pc/N,pTarget:target>0?tc/N:null,p10:pct(0.10),p50:pct(0.50),p90:pct(0.90),mean,min,max,step,hist};};
 
-const dealEconomics=(deal)=>{const {arv,purchase,rehab,ltv,rate,months}=flipBaseInputs(deal);const closing=purchase*0.03;const loanAmt=(purchase+rehab)*ltv;const financing=loanAmt*(rate/12)*months;const monthlyHolding=(arv*0.011)/12+250;const holding=monthlyHolding*months;const selling=arv*0.075;const net=arv-purchase-rehab-financing-holding-closing-selling;const costBasis=purchase+rehab;const costBasisPct=arv>0?costBasis/arv*100:0;const grossSpreadPct=arv>0?(arv-costBasis)/arv*100:0;const marginPct=arv>0?net/arv*100:0;const cashIn=Math.max(purchase+rehab-loanAmt,0)+closing+loanAmt*0.02+holding;const roi=cashIn>0?net/cashIn*100:0;const annRoi=months>0?roi*(12/months):0;const mao70=0.70*arv-rehab;let lo=0,hi=arv||1;for(let i=0;i<44;i++){const mid=(lo+hi)/2;const n=flipNetProfit(arv,mid,rehab,months,ltv,rate);if(n>50000)lo=mid;else hi=mid;}const maoTarget=lo;return {arv,purchase,rehab,closing,financing,holding,selling,net,costBasis,costBasisPct,grossSpreadPct,marginPct,cashIn,roi,annRoi,mao70,maoTarget,months,loanAmt};};
+const dealEconomics=(deal)=>{const {arv,purchase,rehab,months,cfg}=flipBaseInputs(deal);const closing=purchase*cfg.closingPct;const loanAmt=(purchase+rehab)*cfg.ltv;const financing=loanAmt*(cfg.rate/12)*months;const holding=((arv*cfg.taxAnnualPct)/12+cfg.holdMonthly)*months;const selling=arv*cfg.sellingPct;const net=arv-purchase-rehab-financing-holding-closing-selling;const costBasis=purchase+rehab;const costBasisPct=arv>0?costBasis/arv*100:0;const grossSpreadPct=arv>0?(arv-costBasis)/arv*100:0;const marginPct=arv>0?net/arv*100:0;const cashIn=Math.max(purchase+rehab-loanAmt,0)+closing+loanAmt*cfg.pointsPct+holding;const roi=cashIn>0?net/cashIn*100:0;const annRoi=months>0?roi*(12/months):0;const mao70=0.70*arv-rehab;let lo=0,hi=arv||1;for(let i=0;i<44;i++){const mid=(lo+hi)/2;const n=flipNetProfit(arv,mid,rehab,months,cfg);if(n>50000)lo=mid;else hi=mid;}const maoTarget=lo;return {arv,purchase,rehab,closing,financing,holding,selling,net,costBasis,costBasisPct,grossSpreadPct,marginPct,cashIn,roi,annRoi,mao70,maoTarget,months,loanAmt,cfg};};
 
 const computeStrategyScenarios = (deal) => {
     const arv=parseFloat(deal.arv)||0;
@@ -503,12 +504,13 @@ const computeStrategyScenarios = (deal) => {
     const rent_aggressive={strategy:'rental',subScenario:'aggressive',label:'Aggressive',assumptions:'Premium rent (top 10%), 8% vacancy, 35% expenses',annualRent:userRent*1.10*12*0.92,cashFlow:userRent*1.10*12*0.92-userRent*1.10*12*0.35-monthlyDebtMarket*12,capRate:arv>0?((userRent*1.10*12*0.92-userRent*1.10*12*0.35)/arv)*100:0,cashLeftIn:cashLeftIn_market,coc:cashLeftIn_market>0?((userRent*1.10*12*0.92-userRent*1.10*12*0.35-monthlyDebtMarket*12)/cashLeftIn_market)*100:0,dscr:((userRent*1.10*12*0.92-userRent*1.10*12*0.35)/12)/monthlyDebtMarket,risk:4};
     const rent_market={strategy:'rental',subScenario:'market',label:'Market',assumptions:'Market rent, 5% vacancy, 40% expenses',annualRent:annualRent_market*0.95,cashFlow:cashFlow_market,capRate:capRate_market,cashLeftIn:cashLeftIn_market,coc:coc_market,dscr:dscr_market,risk:2};
     const rent_conservative={strategy:'rental',subScenario:'conservative',label:'Conservative',assumptions:'90% of market rent, fast lease-up, 3% vacancy',annualRent:userRent*0.90*12*0.97,cashFlow:userRent*0.90*12*0.97-userRent*0.90*12*0.42-monthlyDebtMarket*12,capRate:arv>0?((userRent*0.90*12*0.97-userRent*0.90*12*0.42)/arv)*100:0,cashLeftIn:cashLeftIn_market,coc:cashLeftIn_market>0?((userRent*0.90*12*0.97-userRent*0.90*12*0.42-monthlyDebtMarket*12)/cashLeftIn_market)*100:0,dscr:((userRent*0.90*12*0.97-userRent*0.90*12*0.42)/12)/monthlyDebtMarket,risk:1};
-    const sellingCost=(p)=>p*0.075;
-    const ltv=parseFloat(deal.ltv)/100||0.75;
-    const rate=parseFloat(deal.interestRate)/100||0.11;
+    const cfg=flipCfg(deal);
+    const sellingCost=(p)=>p*cfg.sellingPct;
+    const ltv=cfg.ltv;
+    const rate=cfg.rate;
     const loanAmt=(purchase+rehab)*ltv;
-    const closingPurchase=purchase*0.03;
-    const monthlyHolding=(arv*0.011)/12+100+150;
+    const closingPurchase=purchase*cfg.closingPct;
+    const monthlyHolding=(arv*cfg.taxAnnualPct)/12+cfg.holdMonthly;
     const rehabMonths=Math.max(months,1);
     const domMarketMonths=metroDOM/30;
     const domAggressiveMonths=(metroDOM*1.5)/30;
@@ -519,7 +521,7 @@ const computeStrategyScenarios = (deal) => {
         const holdingCost=monthlyHolding*totalMonths;
         const baseCost=purchase+rehab+finCost+closingPurchase+holdingCost;
         const netProfit=listPrice-baseCost-sellingCost(listPrice);
-        const cashIn=Math.max(purchase+rehab-loanAmt,0)+closingPurchase+(loanAmt*0.02)+holdingCost;
+        const cashIn=Math.max(purchase+rehab-loanAmt,0)+closingPurchase+(loanAmt*cfg.pointsPct)+holdingCost;
         const roi=cashIn>0?(netProfit/cashIn)*100:0;
         const annualizedRoi=totalMonths>0?roi*(12/totalMonths):0;
         return {strategy:'flip',subScenario,label,assumptions,listPrice,netProfit,roi,annualizedRoi,months:totalMonths,risk};
@@ -1039,6 +1041,12 @@ const RehabEstimator = ({onChangeView}) => {
     );
 };
 
+const MoneyInput = ({value,onChange,placeholder,className}) => {
+    const n=parseFloat(value);
+    const display=(value!==''&&value!=null&&isFinite(n))?'$'+Math.round(n).toLocaleString('en-US'):'';
+    return <input type="text" inputMode="numeric" value={display} placeholder={placeholder||'$0'} onChange={(e)=>onChange(e.target.value.replace(/[^0-9.]/g,''))} className={className} />;
+};
+
 const InfoDot = ({title,formula,rows}) => {
     const [open,setOpen]=useState(false);
     return (<span className="relative inline-flex align-middle" onClick={(e)=>e.stopPropagation()}>
@@ -1085,6 +1093,7 @@ const StrategyAnalyzer = ({onChangeView}) => {
     const lever=(label,valLabel,node)=>(<div><div className="flex justify-between text-xs mb-1"><span className="uppercase tracking-wider text-slate-400">{label}</span><span className="accent-num text-white">{valLabel}</span></div>{node}</div>);
     const panels=[{k:'summary',l:'Summary'},{k:'scenarios',l:'Scenarios'},{k:'risk',l:'Risk'}];
     const numInput=(val,on)=>(<input type="number" value={val} onChange={(e)=>on(e.target.value)} className="w-full px-3 py-2.5 rounded text-lg accent-num" />);
+    const cField=(label,field,suffix,ph)=>(<div><label className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">{label}</label><div className="relative mt-1"><input type="number" value={deal[field]??''} onChange={(e)=>updateDeal({[field]:e.target.value})} placeholder={ph} className="w-full pl-3 pr-9 py-2 rounded accent-num" />{suffix&&<span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-500">{suffix}</span>}</div></div>);
     return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-5">
@@ -1094,17 +1103,10 @@ const StrategyAnalyzer = ({onChangeView}) => {
                         <div className="flex gap-1 bg-[#0F0F0F] p-1 rounded-lg border border-[#2A2A2A]">{[{k:'flip',l:'Fix & Flip'},{k:'rental',l:'Rental'},{k:'wholesale',l:'Wholesale'}].map(o=>(<button key={o.k} onClick={()=>setView(o.k)} className={`text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded ${view===o.k?'fire-bg text-black':'text-slate-400 hover:text-white'}`}>{o.l}</button>))}</div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-                        <div><label className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Purchase price</label>{numInput(deal.purchasePrice,(v)=>updateDeal({purchasePrice:v}))}<input type="range" min="0" max={Math.max(Math.round(arvN)||500000,1000)} step="1000" value={purchaseN} onChange={(e)=>updateDeal({purchasePrice:e.target.value})} className="w-full mt-2" /></div>
-                        <div><label className="text-xs uppercase tracking-wider text-slate-400 font-semibold">After-repair value</label>{numInput(deal.arv,(v)=>updateDeal({arv:v}))}<div className="flex gap-1 mt-2">{[-5,-2,2,5].map(p=>(<button key={p} onClick={()=>updateDeal({arv:String(Math.round((arvN||0)*(1+p/100)))})} className="text-xs bg-[#0F0F0F] hover:bg-[#222] text-slate-300 px-2 py-1 rounded flex-1">{p>0?'+':''}{p}%</button>))}</div></div>
+                        <div><label className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Purchase price</label><MoneyInput value={deal.purchasePrice} onChange={(v)=>updateDeal({purchasePrice:v})} placeholder="$220,000" className="w-full px-3 py-2.5 rounded text-lg accent-num" /><input type="range" min="0" max={Math.max(Math.round(arvN)||500000,1000)} step="1000" value={purchaseN} onChange={(e)=>updateDeal({purchasePrice:e.target.value})} className="w-full mt-2" /></div>
+                        <div><label className="text-xs uppercase tracking-wider text-slate-400 font-semibold">After-repair value</label><MoneyInput value={deal.arv} onChange={(v)=>updateDeal({arv:v})} placeholder="$350,000" className="w-full px-3 py-2.5 rounded text-lg accent-num" /><div className="flex gap-1 mt-2">{[-5,-2,2,5].map(p=>(<button key={p} onClick={()=>updateDeal({arv:String(Math.round((arvN||0)*(1+p/100)))})} className="text-xs bg-[#0F0F0F] hover:bg-[#222] text-slate-300 px-2 py-1 rounded flex-1">{p>0?'+':''}{p}%</button>))}</div></div>
                         <div><label className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Rehab</label><div className="w-full px-3 py-2.5 rounded mt-1 text-lg accent-num bg-[#0F0F0F] text-slate-300">{formatCurrencySimple(parseFloat(deal.finalEstimation)||parseFloat(deal.totalRehabCost)||computeRehabCost(deal).finalEstimation)}</div><button onClick={()=>onChangeView&&onChangeView(View.RehabEstimator)} className="text-[11px] text-amber-400 hover:underline mt-2">Edit on Rehab tab</button></div>
                     </div>
-                    <details className="mt-4 border-t border-[#2A2A2A] pt-3"><summary className="text-xs uppercase tracking-wider text-slate-400 font-semibold cursor-pointer select-none list-none flex items-center gap-1.5"><ChevronDown className="w-3.5 h-3.5" /> Financing & timeline</summary>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-4 mt-4">
-                            {lever(`Hold time ${deal.holdMonthsOverride?'(manual)':'(auto)'}`,`${eco.months.toFixed(1)} mo`,<><input type="range" min="1" max="12" step="0.5" value={Math.min(eco.months,12)} onChange={(e)=>updateDeal({holdMonthsOverride:e.target.value})} className="w-full" />{deal.holdMonthsOverride&&<button onClick={()=>updateDeal({holdMonthsOverride:''})} className="text-[10px] text-amber-400 hover:underline">reset to auto</button>}</>)}
-                            {lever('Loan-to-value',`${N(deal.ltv)||75}%`,<input type="range" min="60" max="90" step="1" value={N(deal.ltv)||75} onChange={(e)=>updateDeal({ltv:e.target.value})} className="w-full" />)}
-                            {lever('Interest rate',`${(N(deal.interestRate)||11).toFixed(2)}%`,<input type="range" min="8" max="14" step="0.25" value={N(deal.interestRate)||11} onChange={(e)=>updateDeal({interestRate:e.target.value})} className="w-full" />)}
-                        </div>
-                    </details>
                     {view!=='flip'&&(<div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 pt-3 border-t border-[#2A2A2A]">
                         {view==='rental'&&<div><label className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Estimated rent (monthly)</label><input type="number" value={deal.estimatedRent} onChange={(e)=>updateDeal({estimatedRent:e.target.value})} placeholder="Auto from metro" className="w-full px-3 py-2 rounded mt-1" /></div>}
                         {view==='wholesale'&&<><div><label className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Seller mortgage balance</label><input type="number" value={deal.sellerMortgageBalance} onChange={(e)=>updateDeal({sellerMortgageBalance:e.target.value})} className="w-full px-3 py-2 rounded mt-1" /></div><div><label className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Seller rate %</label><input type="number" step="0.1" value={deal.sellerMortgageRate} onChange={(e)=>updateDeal({sellerMortgageRate:e.target.value})} className="w-full px-3 py-2 rounded mt-1" /></div></>}
@@ -1119,6 +1121,21 @@ const StrategyAnalyzer = ({onChangeView}) => {
                         <div className="text-center"><span className={`inline-block text-sm font-extrabold uppercase tracking-wider px-4 py-2 rounded-lg border ${vColor}`}>{score.verdict}</span><p className="text-[11px] text-slate-500 mt-1 accent-num">{score.total.toFixed(0)}/100</p></div>
                         <div className="text-right"><p className="text-[10px] uppercase tracking-wider text-slate-500">Max offer (70% rule)</p><p className="text-xl font-extrabold accent-num text-white">{formatCurrencySimple(eco.mao70)}</p><p className={`text-xs ${overMao>0?'text-red-400':'text-emerald-400'}`}>{overMao>0?`${formatCurrencySimple(overMao)} over`:`${formatCurrencySimple(-overMao)} under`}</p></div>
                     </div>
+
+                    {view==='flip'&&(<div className="bg-[#141414] rounded-xl border border-[#2A2A2A] p-5">
+                        <h3 className="text-white font-semibold mb-1 flex items-center gap-2"><DollarSign className="w-4 h-4 text-amber-400" /> Financing & costs</h3>
+                        <p className="text-xs text-slate-500 mb-4">Every assumption behind the numbers. Edit any of them and the analysis updates.</p>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-4">
+                            {cField('Loan-to-value','ltv','%','75')}
+                            {cField('Interest rate','interestRate','%','11')}
+                            {cField('Loan points','loanPointsPct','%','2')}
+                            {cField('Hold time','holdMonthsOverride','mo',eco.months.toFixed(1))}
+                            {cField('Closing costs','closingPct','% buy','3')}
+                            {cField('Selling costs','sellingPct','% ARV','7.5')}
+                            {cField('Property tax','taxAnnualPct','%/yr','1.1')}
+                            {cField('Insurance + utilities','holdMonthly','$/mo','250')}
+                        </div>
+                    </div>)}
 
                     <div className="flex gap-6 border-b border-[#2A2A2A]">{panels.map(p=>(<button key={p.k} onClick={()=>setPanel(p.k)} className={`text-sm font-semibold pb-2 -mb-px border-b-2 transition-colors ${panel===p.k?'text-white border-amber-500':'text-slate-500 border-transparent hover:text-slate-300'}`}>{p.l}</button>))}</div>
 
