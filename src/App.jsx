@@ -545,12 +545,10 @@ const computeFinancingScenarios = (deal,strategy) => {
     const rehab=parseFloat(deal.finalEstimation)||parseFloat(deal.totalRehabCost)||computeRehabCost(deal).finalEstimation;
     const months=getProjectMonths(deal).totalProjectMonths;
     const totalCost=purchase+rehab;
-    const closingPurchase=purchase*FINANCING_DEFAULTS_2026.closingCosts.purchasePct;
-    const closingSale=arv*FINANCING_DEFAULTS_2026.closingCosts.saleAllInPct;
-    const monthlyTax=(arv*FINANCING_DEFAULTS_2026.holdingCosts.propertyTaxAnnualPct)/12;
-    const monthlyIns=FINANCING_DEFAULTS_2026.holdingCosts.insuranceMonthlyVacant;
-    const monthlyUtil=FINANCING_DEFAULTS_2026.holdingCosts.utilitiesMonthlyRehab;
-    const monthlyHolding=monthlyTax+monthlyIns+monthlyUtil;
+    const cfg=flipCfg(deal);
+    const closingPurchase=purchase*cfg.closingPct;
+    const closingSale=arv*cfg.sellingPct;
+    const monthlyHolding=(arv*cfg.taxAnnualPct)/12+cfg.holdMonthly;
     const totalHoldingCash=monthlyHolding*months;
     const sellerBalance=parseFloat(deal.sellerMortgageBalance)||0;
     const sellerRate=parseFloat(deal.sellerMortgageRate)/100||0;
@@ -1214,8 +1212,8 @@ const FinancingProfit = ({onChangeView}) => {
                 <div className="bg-[#1A1A1A] p-6 rounded-xl border border-[#2A2A2A]">
                     <h2 className="text-xl font-bold headline gradient-text mb-4 flex items-center gap-2"><DollarSign className="w-5 h-5" /> Profit Analysis</h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div><div className="flex items-center justify-between mb-1"><label className="text-xs uppercase text-slate-400">ARV</label><input type="number" value={arv} onChange={(e)=>updateDeal({arv:e.target.value})} className="w-32 px-2 py-1 text-xs rounded text-right" /></div><input type="range" min="0" max="2000000" step="5000" value={arv} onChange={(e)=>updateDeal({arv:e.target.value})} /><p className="text-xs text-slate-500 mt-1">{formatCurrencySimple(arv)}{sqft>0?` (${formatCurrency(arv/sqft, true)}/sqft)`:''}</p></div>
-                        <div><div className="flex items-center justify-between mb-1"><label className="text-xs uppercase text-slate-400">Purchase</label><input type="number" value={purchase} onChange={(e)=>updateDeal({purchasePrice:e.target.value})} className="w-32 px-2 py-1 text-xs rounded text-right" /></div><input type="range" min="0" max="2000000" step="5000" value={purchase} onChange={(e)=>updateDeal({purchasePrice:e.target.value})} /><p className="text-xs text-slate-500 mt-1">{formatCurrencySimple(purchase)}{sqft>0?` (${formatCurrency(purchase/sqft, true)}/sqft)`:''}</p></div>
+                        <div><label className="text-xs uppercase text-slate-400">ARV</label><MoneyInput value={deal.arv} onChange={(v)=>updateDeal({arv:v})} placeholder="$0" className="w-full px-3 py-2.5 rounded mt-1 text-lg accent-num" /><p className="text-xs text-slate-500 mt-1">{sqft>0?`${formatCurrency(arv/sqft, true)}/sqft`:'\u00A0'}</p></div>
+                        <div><label className="text-xs uppercase text-slate-400">Purchase</label><MoneyInput value={deal.purchasePrice} onChange={(v)=>updateDeal({purchasePrice:v})} placeholder="$0" className="w-full px-3 py-2.5 rounded mt-1 text-lg accent-num" /><p className="text-xs text-slate-500 mt-1">{sqft>0?`${formatCurrency(purchase/sqft, true)}/sqft`:'\u00A0'}</p></div>
                         <div><label className="text-xs uppercase text-slate-400">Target Profit</label><input type="number" value={deal.targetProfit} onChange={(e)=>updateDeal({targetProfit:e.target.value})} className="w-full px-3 py-2 rounded mt-1" /></div>
                         <div><label className="text-xs uppercase text-slate-400">LTV %</label><input type="number" value={deal.ltv} onChange={(e)=>updateDeal({ltv:e.target.value})} className="w-full px-3 py-2 rounded mt-1" /></div>
                         <div><label className="text-xs uppercase text-slate-400">Interest Rate %</label><input type="number" step="0.1" value={deal.interestRate} onChange={(e)=>updateDeal({interestRate:e.target.value})} className="w-full px-3 py-2 rounded mt-1" /></div>
