@@ -296,6 +296,13 @@ const formatPct = (v,d=1)=>{if(isNaN(v)||!isFinite(v))return 'N/A';return `${v.t
 
 const getDealMetrics = (arv,purchasePrice,rehabCosts,fp,sqft,extraCosts,deal) => {
     const {ltv,interestRate,holdingPeriod} = fp;
+    if(deal && (parseFloat(deal.arv)||0)>0){
+        const eco=dealEconomics(deal);
+        const extra=(extraCosts||[]).reduce((a,c)=>a+(parseFloat(c.amount)||0),0);
+        const netProfit=eco.net-extra;
+        const points=eco.loanAmount*eco.cfg.pointsPct;
+        return {arv:eco.arv,purchasePrice:eco.purchase,rehabCosts:eco.rehab,sellingCosts:eco.selling,closingCosts:eco.closing,loanAmount:eco.loanAmount,loanPoints:points,financingCosts:eco.financing+points,totalHoldingCosts:eco.holding,totalProjectCost:eco.arv-netProfit,netProfit,acquisitionCost:eco.cashIn,roi:eco.cashIn>0?(netProfit/eco.cashIn)*100:Infinity,downPayment:Math.max(eco.purchase+eco.rehab-eco.loanAmount,0),totalCostBasis:eco.costBasis,ltv:eco.cfg.ltv*100,costBasisOfArv:eco.costBasisPct,profitMargin:eco.arv>0?(netProfit/eco.arv)*100:0,arvPerSqft:sqft>0?eco.arv/sqft:0,purchasePricePerSqft:sqft>0?eco.purchase/sqft:0,rehabPerSqft:sqft>0?eco.rehab/sqft:0,totalExtraCosts:extra,loanToArv:eco.arv>0?(eco.loanAmount/eco.arv)*100:0,sqft,holdingMonths:eco.months};
+    }
     // Use shared month calc when deal context available, else fall back to user holdingPeriod
     const projectMonths = deal ? getProjectMonths(deal) : null;
     const months = projectMonths ? projectMonths.totalProjectMonths : holdingPeriod;
@@ -596,19 +603,20 @@ const computeDealScore = (deal) => {
     const rehab=parseFloat(deal.finalEstimation)||parseFloat(deal.totalRehabCost)||computeRehabCost(deal).finalEstimation;
     const userCash=parseFloat(deal.userCashAvailable)||0;
     const projectTime=getProjectMonths(deal);
-    const months=projectTime.totalProjectMonths;
+    const eco=dealEconomics(deal);
+    const months=eco.months;
     const metroBM=METRO_BENCHMARKS[deal.metroDisplay]||NATIONAL_BENCHMARKS;
-    const ltv=parseFloat(deal.ltv)/100||0.75;
+    const ltv=eco.cfg.ltv;
     const totalCost=purchase+rehab;
-    const loanAmount=totalCost*ltv;
+    const loanAmount=eco.loanAmount;
     const equity=Math.max(totalCost-loanAmount,1);
-    const loanPoints=loanAmount*0.02;
-    const finCosts=loanAmount*(parseFloat(deal.interestRate)/100/12)*months+loanPoints;
-    const closingPurch=purchase*0.03;
-    const sellingCost=arv*0.075;
-    const totalProjectCost=totalCost+closingPurch+sellingCost+finCosts;
-    const netProfit=arv-totalProjectCost;
-    const cashRequired=equity+closingPurch+finCosts;
+    const loanPoints=loanAmount*eco.cfg.pointsPct;
+    const finCosts=eco.financing+loanPoints;
+    const closingPurch=eco.closing;
+    const sellingCost=eco.selling;
+    const totalProjectCost=arv-eco.net;
+    const netProfit=eco.net;
+    const cashRequired=eco.cashIn;
     const rawGrossProfit=arv-totalCost;
     const grossProfit=Math.max(rawGrossProfit,1);
     const slide=(v,hi,lo,mx)=>{if(v>=hi)return mx;if(v<=lo)return 0;return Math.round(((v-lo)/(hi-lo))*mx*10)/10;};
