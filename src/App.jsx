@@ -1,5 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef, useContext, createContext } from 'react';
 import { Construction, TrendingUp, Inbox, SlidersHorizontal, Landmark, BarChart2, Table, Mail, Info, ChevronDown, Bookmark, Share2, Save, Printer, Download, Trash2, X, Calculator, Sparkles, FolderOpen, Edit3, FileText, Calendar, Target, Award, AlertTriangle, CheckCircle, CheckCircle2, Clock, DollarSign, Layers, Activity, Shield, Zap, Compass, MapPin, Home, Trophy, Check, LogOut, Lock, User } from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { createClient } from '@supabase/supabase-js';
 const SUPABASE_URL=import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY=import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -750,10 +752,64 @@ const MarketSnapshot = () => {
     );
 };
 
+const PDF_DK=[21,17,14],PDF_TXT=[26,26,26],PDF_MUT=[120,113,108],PDF_BURNT=[194,65,12],PDF_HEAD=[154,52,18];
+const pdf$=(n)=>'$'+Math.round(Number(n)||0).toLocaleString('en-US');
+const pdfPct=(n,d=1)=>(Number(n)||0).toFixed(d)+'%';
+const REHAB_CAT_ORDER=['General Interior','Kitchen Remodel','Bathroom Remodel','General Exterior','Major Systems & Utilities'];
+const generateDealPdf=(deal,market)=>{
+  const eco=dealEconomics(deal),score=computeDealScore(deal),rehabRes=computeRehabCost(deal),cfg=eco.cfg;
+  const doc=new jsPDF({unit:'pt',format:'letter'});
+  const W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight(),M=40,cw=W-M*2;let y=0;
+  const band=(title)=>{doc.setFillColor(...PDF_DK);doc.rect(0,0,W,54,'F');doc.setTextColor(249,115,22);doc.setFont('helvetica','bold');doc.setFontSize(15);doc.text('Essential Analyzer',M,32);doc.setTextColor(214,211,209);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.text(title,W-M,26,{align:'right'});doc.text('Generated '+new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}),W-M,38,{align:'right'});y=78;};
+  const footer=(label)=>{doc.setDrawColor(230);doc.line(M,H-30,W-M,H-30);doc.setTextColor(168,162,158);doc.setFontSize(8);doc.setFont('helvetica','normal');doc.text('The Unshakable Investor · Confidential',M,H-18);doc.text(label,W-M,H-18,{align:'right'});};
+  const sectionTitle=(t)=>{doc.setTextColor(...PDF_HEAD);doc.setFont('helvetica','bold');doc.setFontSize(10);doc.text(t.toUpperCase(),M,y);y+=8;};
+  band('FIX & FLIP DEAL ANALYSIS');
+  doc.setTextColor(...PDF_TXT);doc.setFont('helvetica','bold');doc.setFontSize(14);doc.text(deal.address||deal.name||'Untitled deal',M,y);y+=15;
+  doc.setTextColor(...PDF_MUT);doc.setFont('helvetica','normal');doc.setFontSize(9);
+  const sub=[deal.metroDisplay?deal.metroDisplay.split(',')[0]:null,deal.beds?deal.beds+' bed':null,deal.bathsToRemodel?deal.bathsToRemodel+' bath':null,deal.sqft?Number(deal.sqft).toLocaleString()+' sqft':null,deal.zip?'ZIP '+deal.zip:null].filter(Boolean).join('   ·   ');
+  doc.text(sub,M,y);y+=8;doc.setDrawColor(235);doc.line(M,y,W-M,y);y+=16;
+  const kpis=[['PURCHASE',pdf$(eco.purchase)],['ARV',pdf$(eco.arv)],['REHAB',pdf$(eco.rehab)],['NET PROFIT',pdf$(eco.net)],['ROI / CASH',pdfPct(eco.roi)],['MARGIN',pdfPct(eco.marginPct)]];
+  const kw=(cw-5*8)/6;
+  kpis.forEach((k,i)=>{const x=M+i*(kw+8),hl=k[0]==='NET PROFIT';doc.setFillColor(hl?255:250,hl?247:250,hl?237:248);doc.rect(x,y,kw,42,'F');doc.setTextColor(hl?154:120,hl?52:113,hl?18:108);doc.setFontSize(7);doc.setFont('helvetica','normal');doc.text(k[0],x+6,y+15);doc.setTextColor(hl?194:26,hl?65:26,hl?12:26);doc.setFont('helvetica','bold');doc.setFontSize(11);doc.text(k[1],x+6,y+32);});
+  y+=60;
+  sectionTitle('Where the money goes');
+  autoTable(doc,{startY:y,margin:{left:M,right:M},theme:'plain',styles:{fontSize:9,cellPadding:2.5,textColor:PDF_TXT},columnStyles:{1:{halign:'right'}},body:[['ARV (resale value)',pdf$(eco.arv)],['Purchase','-'+pdf$(eco.purchase)],['Rehab','-'+pdf$(eco.rehab)],['Financing','-'+pdf$(eco.financing)],['Holding','-'+pdf$(eco.holding)],['Closing','-'+pdf$(eco.closing)],['Selling','-'+pdf$(eco.selling)]],foot:[['Net profit',pdf$(eco.net)]],footStyles:{fontStyle:'bold',textColor:PDF_BURNT,fillColor:[255,255,255],fontSize:10}});
+  y=doc.lastAutoTable.finalY+16;
+  sectionTitle('Maximum offer & key ratios');
+  autoTable(doc,{startY:y,margin:{left:M,right:M},theme:'plain',styles:{fontSize:9,cellPadding:2.5,textColor:PDF_TXT},columnStyles:{1:{halign:'right'},3:{halign:'right'}},body:[['70% rule MAO',pdf$(eco.mao70),'Cost basis / ARV',pdfPct(eco.costBasisPct)],['For $50K profit',pdf$(eco.maoTarget),'Gross spread',pdfPct(eco.grossSpreadPct)],['Your offer',pdf$(eco.purchase),'Annualized ROI',pdfPct(eco.annRoi)]]});
+  y=doc.lastAutoTable.finalY+16;
+  sectionTitle('Financing assumptions');
+  doc.setTextColor(87,83,78);doc.setFont('helvetica','normal');doc.setFontSize(9);
+  const fa='LTV '+Math.round(cfg.ltv*100)+'%   ·   Rate '+(cfg.rate*100).toFixed(2)+'%   ·   Points '+(cfg.pointsPct*100).toFixed(1)+'%   ·   Hold '+eco.months.toFixed(1)+' mo   ·   Closing '+(cfg.closingPct*100).toFixed(1)+'%   ·   Selling '+(cfg.sellingPct*100).toFixed(1)+'%   ·   Tax '+(cfg.taxAnnualPct*100).toFixed(2)+'%/yr   ·   Ins+Util '+pdf$(cfg.holdMonthly)+'/mo';
+  doc.text(doc.splitTextToSize(fa,cw),M,y+4);
+  footer('Page 1 of 3 · Deal Summary');
+  doc.addPage();band('SCOPE OF WORK');sectionTitle('Itemized rehab');
+  const groups={};
+  (rehabRes.itemizedList||[]).forEach(it=>{let cat=rehabItemMap[it.id]?.category;if(!cat&&it.id&&itemGroups[it.id]){cat=rehabItemMap[itemGroups[it.id].options?.[0]]?.category;}cat=cat||'Additional items';(groups[cat]=groups[cat]||[]).push(it);});
+  const cats=[...REHAB_CAT_ORDER.filter(c=>groups[c]),...Object.keys(groups).filter(c=>!REHAB_CAT_ORDER.includes(c))];
+  if(cats.length===0){doc.setTextColor(...PDF_MUT);doc.setFontSize(9);doc.setFont('helvetica','normal');doc.text('No rehab scope selected yet.',M,y+8);y+=24;}
+  cats.forEach(cat=>{autoTable(doc,{startY:y,margin:{left:M,right:M},theme:'plain',head:[[cat,'']],headStyles:{fontStyle:'bold',fontSize:9,textColor:PDF_HEAD,fillColor:[255,255,255]},styles:{fontSize:9,cellPadding:1.5,textColor:[87,83,78]},columnStyles:{1:{halign:'right'}},body:groups[cat].map(it=>[it.name,pdf$(it.cost)])});y=doc.lastAutoTable.finalY+8;});
+  autoTable(doc,{startY:y,margin:{left:M,right:M},theme:'plain',styles:{fontSize:9,cellPadding:2.5,textColor:PDF_TXT},columnStyles:{1:{halign:'right'}},body:[['Subtotal (metro-adjusted ×'+(deal.metroMultiplier||1).toFixed(2)+')',pdf$(rehabRes.rehabEstimation)],['Contingency (10%)',pdf$(rehabRes.finalEstimation-rehabRes.rehabEstimation)]],foot:[['Total rehab',pdf$(rehabRes.finalEstimation)]],footStyles:{fontStyle:'bold',textColor:PDF_BURNT,fillColor:[255,255,255],fontSize:10}});
+  y=doc.lastAutoTable.finalY+18;
+  if(market){sectionTitle('Market snapshot · ZIP '+(market.zipcode||deal.zip)+' (Zillow + Redfin)');const beds=Math.min(Math.max(parseInt(deal.beds)||3,1),5);const bedVal=market[{1:'avg_1bed',2:'avg_2bed',3:'avg_3bed',4:'avg_4bed',5:'avg_5bed'}[beds]];autoTable(doc,{startY:y,margin:{left:M,right:M},theme:'plain',styles:{fontSize:9,cellPadding:2.5,textColor:PDF_TXT},columnStyles:{1:{halign:'right'},3:{halign:'right'}},body:[['Typical '+beds+'-bed value',bedVal?pdf$(bedVal):'—','Median sale',market.median_sale_price_nsa?pdf$(market.median_sale_price_nsa):'—'],['Median $/sqft',market.median_sale_price_per_sqft?'$'+Math.round(market.median_sale_price_per_sqft):'—','Days on market',market.median_days_on_market!=null?Math.round(market.median_days_on_market)+' days':'—'],['Sale-to-list',market.avg_sale_to_list_ratio_pct!=null?market.avg_sale_to_list_ratio_pct+'%':'—','Months of supply',market.months_of_supply!=null?market.months_of_supply+' mo':'—']]});}
+  footer('Page 2 of 3 · Scope of Work');
+  doc.addPage();band('DEAL SCORE');
+  doc.setTextColor(...PDF_TXT);doc.setFont('helvetica','bold');doc.setFontSize(13);doc.text(score.verdict+'  ·  Grade '+score.grade+'  ·  '+score.total.toFixed(1)+' / 100',M,y);y+=18;
+  sectionTitle('Category totals');
+  const catW={Financial:35,Market:15,Capital:15,Execution:15,Strategy:15,Safety:5};
+  autoTable(doc,{startY:y,margin:{left:M,right:M},theme:'plain',styles:{fontSize:9,cellPadding:2.5,textColor:PDF_TXT},columnStyles:{1:{halign:'right'}},body:Object.entries(score.categoryTotals).map(([c,t])=>[c,t.toFixed(1)+' / '+(catW[c]||'')])});
+  y=doc.lastAutoTable.finalY+16;sectionTitle('20-metric breakdown');
+  autoTable(doc,{startY:y,margin:{left:M,right:M},theme:'striped',head:[['#','Metric','Value','Score']],headStyles:{fillColor:PDF_DK,textColor:[255,255,255],fontSize:8},styles:{fontSize:8,cellPadding:2,textColor:[60,55,50]},columnStyles:{0:{cellWidth:18},3:{halign:'right',cellWidth:55}},body:score.metrics.map(mm=>[String(mm.id),mm.name,String(mm.value),mm.score+' / '+mm.max])});
+  footer('Page 3 of 3 · Deal Score');
+  const safe=(deal.address||deal.name||'deal').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').slice(0,60);
+  doc.save((safe||'deal')+'-analysis.pdf');
+};
+
 const DealSnapshotRail = () => {
     const {deal,updateDeal}=useDeal();
     const {saveDeal}=useSavedDealsContext();
     const toast=useToast();
+    const {row:market}=useZipMarket(deal.zip);
     const arv=parseFloat(deal.arv)||0;
     const purchase=parseFloat(deal.purchasePrice)||0;
     const rehab=parseFloat(deal.finalEstimation)||parseFloat(deal.totalRehabCost)||0;
@@ -766,7 +822,7 @@ const DealSnapshotRail = () => {
     if(target>0){if(m.netProfit>=target)npc='kpi-good';else if(m.netProfit>=target*0.9)npc='kpi-warn';}else if(m.netProfit>0)npc='kpi-good';
     const handleSave=()=>{const isUpdate=!!deal.id;const name=window.prompt(isUpdate?'Update this saved deal — name:':'Save deal as:',deal.name||deal.address||'Untitled Deal');if(!name)return;saveDeal({...deal,arvNum:arv,purchasePriceNum:purchase,rehabCostNum:rehab,netProfit:m.netProfit,roi:m.roi},name).then(saved=>{if(saved&&saved.id){updateDeal({id:saved.id,name:saved.name});}toast?.show(isUpdate?'Deal updated':'Deal saved');});};
     const handleShare=async()=>{const url=`${window.location.origin}${window.location.pathname}?deal=${encodeDealToUrl(deal)}`;try{await navigator.clipboard.writeText(url);toast?.show('Share URL copied');}catch(e){window.prompt('Copy URL:',url);}};
-    const handlePrint=()=>{window.print();};
+    const handlePrint=()=>{try{generateDealPdf(deal,market);toast?.show('PDF downloaded');}catch(e){console.error(e);toast?.show('PDF failed');}};
     return (
         <>
         <aside className="bg-[#1A1A1A] rounded-xl border border-[#2A2A2A] p-5 space-y-3 no-print">
