@@ -766,7 +766,7 @@ const generateDealPdf=(deal,market,scope='score')=>{
   band(scope==='rehab'?'PROPERTY & SCOPE OF WORK':scope==='analysis'?'FIX & FLIP ANALYSIS':'FIX & FLIP DEAL ANALYSIS');
   doc.setTextColor(...PDF_TXT);doc.setFont('helvetica','bold');doc.setFontSize(14);doc.text(deal.address||deal.name||'Untitled deal',M,y);y+=15;
   doc.setTextColor(...PDF_MUT);doc.setFont('helvetica','normal');doc.setFontSize(9);
-  const bath=parseFloat(deal.bathsToRemodel)||0;
+  const bath=parseFloat(deal.baths)||0;
   const sub=[deal.metroDisplay?deal.metroDisplay.split(',')[0]:null,deal.beds?deal.beds+' bed':null,bath?bath+' bath':null,deal.sqft?Number(deal.sqft).toLocaleString()+' sqft':null,deal.zip?'ZIP '+deal.zip:null].filter(Boolean).join('   ·   ');
   doc.text(sub,M,y);y+=8;doc.setDrawColor(235);doc.line(M,y,W-M,y);y+=16;
   const kpis=incAnalysis?[['PURCHASE',pdf$(eco.purchase)],['ARV',pdf$(eco.arv)],['REHAB',pdf$(eco.rehab)],['NET PROFIT',pdf$(eco.net)],['ROI / CASH',pdfPct(eco.roi)],['MARGIN',pdfPct(eco.marginPct)]]:[['PURCHASE',pdf$(eco.purchase)],['ARV',pdf$(eco.arv)],['REHAB',pdf$(eco.rehab)]];
