@@ -1,14 +1,15 @@
 # EssentialOS — Feature Overview
 
-**EssentialOS** (The Unshakable Deal Analyzer) is the fix-and-flip underwriting tool for
+**EssentialOS** (wordmark **"Essential Analyzer"**) is the fix-and-flip underwriting tool for
 The Unshakable Investor's Legacy Essential members. It replaces the fix-and-flip
-spreadsheet: enter a deal, and it estimates rehab, models exit strategies, stress-tests
+spreadsheet: enter a deal, and it estimates rehab, analyzes the economics, stress-tests
 the numbers, and returns a clear **BUY / WAIT / KILL** verdict — with every deal saved to
 the member's account.
 
 - **Live app:** unshakable-essential-os.vercel.app
-- **Stack:** React + Vite, Tailwind, Supabase (auth + data), deployed on Vercel
+- **Stack:** React + Vite, Tailwind, Supabase (auth + data), jsPDF (reports), deployed on Vercel
 - **Offer:** Legacy Essential ($997)
+- **Tabs:** Home · Rehab · Analysis · Score (four tabs)
 
 ---
 
@@ -24,7 +25,8 @@ The landing screen is a working dashboard, not a marketing page:
 - **KPI strip:** saved deals, best profit, average score, buy-rated count.
 - **Pipeline table:** every saved deal with ARV, projected profit, score, and verdict —
   click any row to reopen it.
-- **Resume card** to jump back into your latest deal, plus a quick workflow rail.
+- **Resume card** to jump back into your latest deal, plus a 3-step workflow rail
+  (Rehab scope → Analysis → Score).
 
 ## Profile
 Opened from the profile icon (top-right). Holds:
@@ -33,27 +35,49 @@ Opened from the profile icon (top-right). Holds:
   saved to your account, and applied automatically to every deal.
 - **Saved Deals** — load, delete, or export the whole pipeline to CSV.
 
+## Saving deals
+- The **Save** button (right-rail snapshot) upserts: saving a deal you loaded **updates that
+  same record** instead of creating a duplicate. Brand-new deals (after "Start a new deal")
+  insert a fresh record.
+
 ## Rehab Estimator
-- **62 line items** across interior, exterior, major systems, kitchen, and bath.
+- **62 line items** across General Interior, Kitchen, Bathroom, General Exterior, and
+  Major Systems & Utilities.
 - Costs are **metro-adjusted** to the property's market (ZIP → metro lookup).
 - Quick-scope presets (Cosmetic / Mid-Grade / Full Gut) and a built-in 10% contingency.
+- A **Live Cost Meter** shows base → metro-adjusted → +10% final in real time.
 - The hold period for every downstream calculation is **auto-estimated from the rehab
   scope** (more work = longer timeline = higher carrying cost).
 
-## Strategy — flip-first underwriting
-Assumes **fix & flip** by default. With Purchase, ARV, and Rehab entered, it shows:
-1. **Scenario cards** — Aggressive / Market / Conservative outcomes.
-2. **Sensitivity heatmaps** — net profit across **ARV × Rehab** and **ARV × Hold time**,
-   color-graded green→red, with your current deal highlighted. Shows exactly what breaks
-   the deal.
-3. **Monte Carlo simulation** — 8,000 runs varying ARV, rehab, and hold time with
-   realistic skew (rehab and timelines lean toward overruns). Reports **chance of profit**,
-   chance of hitting your target, and **P10 / P50 / P90** net profit with a distribution chart.
+## Analysis — flip-first underwriting
+The deal's full financial workup. Assumes **fix & flip** by default, with a toggle to
+**Rental / BRRRR** or **Wholesale** that reveals only the inputs those strategies need.
 
-A toggle switches to **Rental / BRRRR** or **Wholesale**, revealing only the extra inputs
-those strategies need (rent for rental; seller-finance fields for wholesale). Rental models
-NOI, cap rate, DSCR, cash flow, and cash-on-cash with a DSCR refinance; wholesale models
-assignment-fee scenarios.
+- **Adjust your deal** — `$`-formatted Purchase, ARV, and Rehab inputs (plus −5% / −2% /
+  +2% / +5% quick nudges on ARV).
+- **Result strip** — live Net Profit, BUY/WAIT/KILL verdict, and **Maximum Offer (70% rule)**
+  with how far the current offer is over/under.
+- **Financing & costs** — every assumption is editable in one place: LTV, interest rate,
+  loan points, hold time, closing %, selling %, property tax %, and insurance + utilities.
+  Edit any of them and the whole analysis updates.
+- Three sub-panels:
+  1. **Summary** — a "where the money goes" waterfall (ARV → purchase, rehab, financing,
+     holding, closing, selling → net), the Maximum Offer breakdown, and a ratio scorecard
+     (profit margin, gross spread, cost basis/ARV, ROI on cash, annualized ROI). Each ratio
+     has an **"i" info circle** showing the exact formula and the numbers behind it.
+  2. **Scenarios** — Aggressive / Market / Conservative outcomes.
+  3. **Risk** — **sensitivity heatmaps** (net profit across ARV × Rehab and ARV × Hold time,
+     color-graded green→red with your deal highlighted) and a **Monte Carlo simulation**
+     (8,000 runs with realistic overrun skew → chance of profit, chance of hitting target,
+     and P10 / P50 / P90 net profit).
+
+Rental models NOI, cap rate, DSCR, cash flow, and cash-on-cash with a DSCR refinance;
+wholesale models assignment-fee scenarios.
+
+## Unified profit engine
+Net profit, ROI, and margin are computed by a single engine, so the **Analysis tab, the
+Deal Snapshot, and the Deal Score always agree** — there is no longer one number on one tab
+and a different number on another.
 
 ## ZIP Market Snapshot (Zillow + Redfin)
 A live market panel on the right rail, powered by a database of **26,000+ ZIP codes** of
@@ -63,15 +87,23 @@ Zillow/Redfin data. It appears once ZIP and bedrooms are entered and shows, for 
 - A market-heat badge (fast / balanced / slow) from months of supply.
 - A live check: "your ARV is X% above/below the ZIP median $/sqft."
 
-## Financing & Profit
-Five financing stacks modeled side by side for the chosen strategy (e.g., all-cash, hard
-money, HM + private money, DSCR refi, Subject-To, seller finance — availability depends on
-the strategy and seller details), so the best funding path for the deal is obvious.
-
 ## Deal Score
-A 20-metric scoring engine (100 points) across Financial, Market, Capital, Execution,
-Strategy, and Safety — including a stress test (ARV −10%, rehab +20%, timeline slip). It
-returns a letter grade and a single verdict: **BUY, WAIT, or KILL** before you sign.
+A 20-metric scoring engine (100 points) across Financial (35), Market (15), Capital (15),
+Execution (15), Strategy (15), and Safety (5) — including a stress test (ARV −10%,
+rehab +20%, timeline slip). It returns a letter grade and a single verdict:
+**BUY, WAIT, or KILL** before you sign, plus a focus-areas list of the weakest metrics.
+
+## PDF report export
+The **PDF** button (right-rail snapshot) generates a real, branded PDF that **downloads
+directly** — no browser print dialog, no screenshot of the screen. The report is
+**context-aware**, matching the tab you're on:
+- **From Rehab** → property info + itemized scope of work (`…-scope.pdf`).
+- **From Analysis** → the above plus the full financial analysis (`…-analysis.pdf`).
+- **From Score** → all three: analysis, scope, and the 20-metric score (`…-full-report.pdf`).
+
+Pages are paginated with "Page X of N" footers and pull live deal data — the scope of work
+lists the member's actual selected line items grouped by category, with the real ZIP
+market snapshot.
 
 ---
 
