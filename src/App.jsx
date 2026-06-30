@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef, useContext, createContext } from 'react';
-import { Construction, TrendingUp, Inbox, SlidersHorizontal, Landmark, BarChart2, Table, Mail, Info, ChevronDown, Bookmark, Share2, Save, Printer, Download, Trash2, X, Calculator, Sparkles, FolderOpen, Edit3, FileText, Calendar, Target, Award, AlertTriangle, CheckCircle, CheckCircle2, Clock, DollarSign, Layers, Activity, Shield, Zap, Compass, MapPin, Home, Trophy, Check, LogOut, Lock, User } from 'lucide-react';
+import { Construction, TrendingUp, Inbox, SlidersHorizontal, Landmark, BarChart2, Table, Mail, Info, ChevronDown, Bookmark, Share2, Save, Printer, Download, Trash2, X, Calculator, Sparkles, FolderOpen, Edit3, FileText, Calendar, Target, Award, AlertTriangle, CheckCircle, CheckCircle2, Clock, DollarSign, Layers, Activity, Shield, Zap, Compass, MapPin, ExternalLink, Home, Trophy, Check, LogOut, Lock, User } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { createClient } from '@supabase/supabase-js';
@@ -7,6 +7,7 @@ const SUPABASE_URL=import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY=import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase=createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 
+const normalizeUrl=(u)=>{u=(u||'').trim();if(!u)return '';return (u.startsWith('http://')||u.startsWith('https://'))?u:'https://'+u;};
 const View = { Home:'home', RehabEstimator:'rehabEstimatorView', StrategyAnalyzer:'strategyAnalyzerView', DealScore:'dealScoreView' };
 const STORAGE_KEYS = { currentDeal:'unshakable.tools.currentDeal', savedDeals:'unshakable.tools.savedDeals', preferences:'unshakable.tools.preferences' };
 
@@ -348,7 +349,7 @@ const encodeDealToUrl = (d)=>{try{const j=JSON.stringify(d);const u=unescape(enc
 const decodeDealFromUrl = (sp)=>{try{const e=sp.get('deal');if(!e)return null;const u=atob(e);const j=decodeURIComponent(escape(u));return JSON.parse(j);}catch(e){return null;}};
 
 const DEFAULT_DEAL = {
-address:'',zip:'',sqft:'',beds:'',baths:'',
+address:'',zip:'',sqft:'',beds:'',baths:'',listingUrl:'',
 metroDisplay:'',metroMultiplier:1.0,metroRegion:'midwest',stateAbbr:'',
 selectedItems:{},itemQuantities:{},itemPercentages:{},selectedQualities:{},customItems:{},
 bathsToRemodel:'1',totalRehabCost:0,rehabEstimation:0,finalEstimation:0,
@@ -768,7 +769,7 @@ const generateDealPdf=(deal,market,scope='score')=>{
   doc.setTextColor(...PDF_MUT);doc.setFont('helvetica','normal');doc.setFontSize(9);
   const bath=parseFloat(deal.baths)||0;
   const sub=[deal.metroDisplay?deal.metroDisplay.split(',')[0]:null,deal.beds?deal.beds+' bed':null,bath?bath+' bath':null,deal.sqft?Number(deal.sqft).toLocaleString()+' sqft':null,deal.zip?'ZIP '+deal.zip:null].filter(Boolean).join('   ·   ');
-  doc.text(sub,M,y);y+=8;doc.setDrawColor(235);doc.line(M,y,W-M,y);y+=16;
+  doc.text(sub,M,y);y+=8;const lurl=normalizeUrl(deal.listingUrl);if(lurl){doc.setTextColor(194,65,12);doc.setFont('helvetica','normal');doc.setFontSize(9);doc.textWithLink('View listing / photos',M,y+6,{url:lurl});y+=14;}doc.setDrawColor(235);doc.line(M,y,W-M,y);y+=16;
   const kpis=incAnalysis?[['PURCHASE',pdf$(eco.purchase)],['ARV',pdf$(eco.arv)],['REHAB',pdf$(eco.rehab)],['NET PROFIT',pdf$(eco.net)],['ROI / CASH',pdfPct(eco.roi)],['MARGIN',pdfPct(eco.marginPct)]]:[['PURCHASE',pdf$(eco.purchase)],['ARV',pdf$(eco.arv)],['REHAB',pdf$(eco.rehab)]];
   const kw=(cw-(kpis.length-1)*8)/kpis.length;
   kpis.forEach((k,i)=>{const x=M+i*(kw+8),hl=k[0]==='NET PROFIT';doc.setFillColor(hl?255:250,hl?247:250,hl?237:248);doc.rect(x,y,kw,42,'F');doc.setTextColor(hl?154:120,hl?52:113,hl?18:108);doc.setFontSize(7);doc.setFont('helvetica','normal');doc.text(k[0],x+6,y+15);doc.setTextColor(hl?194:26,hl?65:26,hl?12:26);doc.setFont('helvetica','bold');doc.setFontSize(11);doc.text(k[1],x+6,y+32);});
@@ -832,7 +833,7 @@ const DealSnapshotRail = ({pdfScope='score'}={}) => {
         <>
         <aside className="bg-[#1A1A1A] rounded-xl border border-[#2A2A2A] p-5 space-y-3 no-print">
             <div className="flex items-center justify-between"><h3 className="text-xs uppercase tracking-wider text-slate-400 headline">Deal Snapshot</h3><Activity className="w-4 h-4 text-amber-400" /></div>
-            <div className="flex items-center justify-between"><div><p className="text-xs text-slate-500">Address</p><p className="text-sm text-white truncate">{deal.address||'No address yet'}</p></div>{deal.selectedStrategy&&<span className="text-xs bg-[#0F0F0F] text-slate-300 px-2 py-0.5 rounded capitalize">{deal.selectedStrategy}</span>}</div>
+            <div className="flex items-center justify-between"><div><p className="text-xs text-slate-500">Address</p><p className="text-sm text-white truncate">{deal.address||'No address yet'}</p>{normalizeUrl(deal.listingUrl)&&<a href={normalizeUrl(deal.listingUrl)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-amber-400 hover:underline mt-0.5"><ExternalLink className="w-3 h-3" /> View listing / photos</a>}</div>{deal.selectedStrategy&&<span className="text-xs bg-[#0F0F0F] text-slate-300 px-2 py-0.5 rounded capitalize">{deal.selectedStrategy}</span>}</div>
             {hasInputs?(<div className={`p-3 rounded ${npc}`}>
                 <p className="text-xs text-slate-400 uppercase">Net Profit</p>
                 <p className="text-2xl font-bold accent-num">{formatCurrencySimple(m.netProfit)}</p>
@@ -855,8 +856,8 @@ const PipelineDrawer = ({open,onClose,onLoadDeal}) => {
     const initial=(email||'?').trim().charAt(0).toUpperCase()||'?';
     const handleExportCSV=()=>{
         if(deals.length===0){toast?.show('No deals to export');return;}
-        const headers=['Name','Address','ARV','Purchase','Rehab','Net Profit','ROI %','Saved At'];
-        const rows=deals.map(d=>[(d.name||'').replace(/"/g,'""'),(d.address||'').replace(/"/g,'""'),Math.round(d.arvNum||parseFloat(d.arv)||0),Math.round(d.purchasePriceNum||parseFloat(d.purchasePrice)||0),Math.round(d.rehabCostNum||0),Math.round(d.netProfit||0),isFinite(d.roi)?d.roi.toFixed(1):'',d.savedAt||'']);
+        const headers=['Name','Address','Listing URL','ARV','Purchase','Rehab','Net Profit','ROI %','Saved At'];
+        const rows=deals.map(d=>[(d.name||'').replace(/"/g,'""'),(d.address||'').replace(/"/g,'""'),(d.listingUrl||'').replace(/"/g,'""'),Math.round(d.arvNum||parseFloat(d.arv)||0),Math.round(d.purchasePriceNum||parseFloat(d.purchasePrice)||0),Math.round(d.rehabCostNum||0),Math.round(d.netProfit||0),isFinite(d.roi)?d.roi.toFixed(1):'',d.savedAt||'']);
         const csv=[headers,...rows].map(r=>r.map(c=>`"${c}"`).join(',')).join('\n');
         const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
         const link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download=`unshakable-pipeline-${new Date().toISOString().slice(0,10)}.csv`;document.body.appendChild(link);link.click();document.body.removeChild(link);
@@ -935,7 +936,7 @@ const HomePage = ({onChangeView}) => {
                             <thead><tr className="text-[11px] uppercase tracking-wider text-slate-500 border-b border-[#2A2A2A]"><th className="text-left font-medium py-2.5 pl-5">Deal</th><th className="text-right font-medium">ARV</th><th className="text-right font-medium">Profit</th><th className="text-right font-medium">Score</th><th className="text-right font-medium pr-5">Verdict</th></tr></thead>
                             <tbody>{scored.map(d=>(
                                 <tr key={d.id} onClick={()=>loadDeal(d)} className="border-b border-[#1f1f1f] hover:bg-[#202020] cursor-pointer">
-                                    <td className="py-3 pl-5"><p className="font-semibold text-white truncate max-w-[240px]">{d.name}</p><p className="text-xs text-slate-500 truncate max-w-[240px]">{d.address||'No address'}</p></td>
+                                    <td className="py-3 pl-5"><p className="font-semibold text-white truncate max-w-[240px]">{d.name}</p><p className="text-xs text-slate-500 truncate max-w-[240px]">{d.address||'No address'}{normalizeUrl(d.listingUrl)&&<a onClick={(e)=>e.stopPropagation()} href={normalizeUrl(d.listingUrl)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center ml-1.5 align-middle text-amber-400 hover:text-amber-300"><ExternalLink className="w-3 h-3" /></a>}</p></td>
                                     <td className="text-right accent-num text-slate-200 whitespace-nowrap">{formatCurrencySimple(d.arvNum||parseFloat(d.arv)||0)}</td>
                                     <td className={`text-right accent-num whitespace-nowrap ${(d.netProfit||0)>=0?'text-amber-400':'text-red-400'}`}>{formatCurrencySimple(d.netProfit||0)}</td>
                                     <td className="text-right accent-num text-slate-200">{d._score.toFixed(0)}</td>
@@ -1009,6 +1010,7 @@ const RehabEstimator = ({onChangeView}) => {
                             <div><label className="text-xs text-slate-400 uppercase">Baths</label><input type="number" step="0.5" value={deal.baths} onChange={(e)=>updateDeal({baths:e.target.value})} className="w-full px-3 py-2 rounded mt-1" /></div>
                             <div><label className="text-xs text-slate-400 uppercase">Sqft</label><input type="number" value={deal.sqft} onChange={(e)=>updateDeal({sqft:e.target.value})} className="w-full px-3 py-2 rounded mt-1" /></div>
                         </div>
+                        <div className="sm:col-span-2"><label className="text-xs text-slate-400 uppercase">Listing / Photos Link</label><input type="url" value={deal.listingUrl||''} onChange={(e)=>updateDeal({listingUrl:e.target.value})} placeholder="https://zillow.com/...  or  photos folder link" className="w-full px-3 py-2 rounded mt-1" />{normalizeUrl(deal.listingUrl)&&<a href={normalizeUrl(deal.listingUrl)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-amber-400 hover:underline mt-1.5"><ExternalLink className="w-3 h-3" /> Open listing / photos</a>}</div>
                     </div>
                 </div>
                 <div className="bg-[#1A1A1A] p-6 rounded-xl border border-[#2A2A2A]">
