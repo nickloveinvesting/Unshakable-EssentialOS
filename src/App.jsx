@@ -5,7 +5,7 @@ const SUPABASE_URL=import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY=import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase=createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 
-const View = { Home:'home', RehabEstimator:'rehabEstimatorView', StrategyAnalyzer:'strategyAnalyzerView', FinancingProfit:'financingProfitView', DealScore:'dealScoreView' };
+const View = { Home:'home', RehabEstimator:'rehabEstimatorView', StrategyAnalyzer:'strategyAnalyzerView', DealScore:'dealScoreView' };
 const STORAGE_KEYS = { currentDeal:'unshakable.tools.currentDeal', savedDeals:'unshakable.tools.savedDeals', preferences:'unshakable.tools.preferences' };
 
 const FINANCING_DEFAULTS_2026 = {
@@ -539,61 +539,6 @@ const computeStrategyScenarios = (deal) => {
     return {wholesale:[whole_aggressive,whole_market,whole_conservative],rental:[rent_aggressive,rent_market,rent_conservative],flip:[flip_aggressive,flip_market,flip_conservative]};
 };
 
-const computeFinancingScenarios = (deal,strategy) => {
-    const arv=parseFloat(deal.arv)||0;
-    const purchase=parseFloat(deal.purchasePrice)||0;
-    const rehab=parseFloat(deal.finalEstimation)||parseFloat(deal.totalRehabCost)||computeRehabCost(deal).finalEstimation;
-    const months=getProjectMonths(deal).totalProjectMonths;
-    const totalCost=purchase+rehab;
-    const cfg=flipCfg(deal);
-    const closingPurchase=purchase*cfg.closingPct;
-    const closingSale=arv*cfg.sellingPct;
-    const monthlyHolding=(arv*cfg.taxAnnualPct)/12+cfg.holdMonthly;
-    const totalHoldingCash=monthlyHolding*months;
-    const sellerBalance=parseFloat(deal.sellerMortgageBalance)||0;
-    const sellerRate=parseFloat(deal.sellerMortgageRate)/100||0;
-    const tier=deal.creditTier||'1-3deals';
-    const tierMap={'firstTimer':'firstTimer','1-3deals':'moderate','3+deals':'moderate','10+deals':'experienced'};
-    const hmTier=FINANCING_DEFAULTS_2026.hardMoney.tiers[tierMap[tier]||'moderate'];
-    const subjectToAvail=sellerBalance>0&&sellerRate>0;
-
-    if(strategy==='flip'){
-        const sellingCost=closingSale;
-        const allCash=(()=>{const co=totalCost+closingPurchase+totalHoldingCash;const pc=totalCost+closingPurchase+totalHoldingCash+sellingCost;const np=arv-pc;const coc=co>0?(np/co)*100:0;const ar=months>0?coc*(12/months):0;const risk=Math.min(5,1.0+Math.max(0,(months-6)*0.15));return {id:'allCash',name:'All Cash',cashRequired:co,loanAmount:0,monthlyCarry:0,totalFinancingCost:0,acquisitionCost:purchase+closingPurchase,totalProjectCost:pc,netProfit:np,coc,annualizedROI:ar,timeToFirstDollar:months,risk:Math.round(risk*10)/10,available:true};})();
-        const hmStandard=(()=>{const llp=purchase*hmTier.ltvPurchase;const lla=arv*hmTier.arv;const la=Math.min(llp+rehab,lla);const pts=la*hmTier.points;const mi=la*(hmTier.rate/12);const fc=mi*months+pts;const dp=totalCost-la;const co=Math.max(dp,0)+closingPurchase+pts+totalHoldingCash;const pc=totalCost+closingPurchase+totalHoldingCash+sellingCost+fc;const np=arv-pc;const coc=co>0?(np/co)*100:0;const ar=months>0?coc*(12/months):0;const mc=mi+monthlyHolding;const leverageRatio=co>0?la/co:1;const risk=Math.min(5,2.0+leverageRatio*0.8+Math.max(0,(months-6)*0.15));return {id:'hardMoneyStandard',name:'Hard Money Standard',cashRequired:co,loanAmount:la,monthlyCarry:mc,totalFinancingCost:fc,acquisitionCost:purchase+closingPurchase,totalProjectCost:pc,netProfit:np,coc,annualizedROI:ar,timeToFirstDollar:months,risk:Math.round(Math.min(risk,5)*10)/10,available:true};})();
-        const hmLayered=(()=>{const lla=arv*hmTier.arv;const hml=Math.min(purchase*hmTier.ltvPurchase+rehab,lla);const gap=Math.max(totalCost-hml,0);const pl=gap;const hp=hml*hmTier.points;const pr=0.08;const mi=hml*(hmTier.rate/12)+pl*(pr/12);const fc=mi*months+hp;const co=closingPurchase+hp+totalHoldingCash;const pc=totalCost+closingPurchase+totalHoldingCash+sellingCost+fc;const np=arv-pc;const coc=co>0?(np/co)*100:0;const ar=months>0?coc*(12/months):0;const td=hml+pl;const leverageRatio=co>0?td/co:1;const risk=Math.min(5,3.0+leverageRatio*0.5+Math.max(0,(months-6)*0.15));return {id:'hardMoneyLayered',name:'HM + Private Money',cashRequired:co,loanAmount:td,monthlyCarry:mi+monthlyHolding,totalFinancingCost:fc,acquisitionCost:purchase+closingPurchase,totalProjectCost:pc,netProfit:np,coc,annualizedROI:ar,timeToFirstDollar:months,risk:Math.round(Math.min(risk,5)*10)/10,available:true,secondaryLoan:pl};})();
-        const dscrPivot={id:'dscrPivot',name:'DSCR Pivot to BRRRR',cashRequired:0,loanAmount:0,monthlyCarry:0,totalFinancingCost:0,acquisitionCost:0,totalProjectCost:0,netProfit:0,coc:0,annualizedROI:0,timeToFirstDollar:0,risk:0,available:false,unavailableReason:'Switch to BRRRR strategy for DSCR math.'};
-        const subjectTo=(()=>{if(!subjectToAvail)return {id:'subjectTo',name:'Subject-To',cashRequired:0,loanAmount:0,monthlyCarry:0,totalFinancingCost:0,acquisitionCost:0,totalProjectCost:0,netProfit:0,coc:0,annualizedROI:0,timeToFirstDollar:0,risk:0,available:false,unavailableReason:'Enter seller mortgage balance and rate.'};const eq=Math.max(purchase-sellerBalance,0);const mi=sellerBalance*(sellerRate/12);const fc=mi*months+FINANCING_DEFAULTS_2026.subjectTo.legalSetupCost;const co=eq+closingPurchase+rehab+totalHoldingCash+FINANCING_DEFAULTS_2026.subjectTo.legalSetupCost;const pc=totalCost+closingPurchase+totalHoldingCash+sellingCost+fc;const np=arv-pc;const coc=co>0?(np/co)*100:0;const ar=months>0?coc*(12/months):0;const risk=Math.min(5,3.5+Math.max(0,(months-6)*0.2));return {id:'subjectTo',name:'Subject-To',cashRequired:co,loanAmount:sellerBalance,monthlyCarry:mi+monthlyHolding,totalFinancingCost:fc,acquisitionCost:eq+closingPurchase,totalProjectCost:pc,netProfit:np,coc,annualizedROI:ar,timeToFirstDollar:months,risk:Math.round(Math.min(risk,5)*10)/10,available:true};})();
-        return [allCash,hmStandard,hmLayered,dscrPivot,subjectTo];
-    }
-    if(strategy==='rental'){
-        const userRent=parseFloat(deal.estimatedRent)||(METRO_BENCHMARKS[deal.metroDisplay]?.medianRent3BR||2100);
-        const noi=userRent*12*0.60;
-        const dscrRate=FINANCING_DEFAULTS_2026.dscr.rate;
-        const refiLoan=arv*FINANCING_DEFAULTS_2026.dscr.ltvCashOutRefi;
-        const refiPI=(refiLoan*(dscrRate/12))/(1-Math.pow(1+dscrRate/12,-360));
-        const refiClosing=refiLoan*FINANCING_DEFAULTS_2026.conventionalCashOutRefi.closingCostPct;
-        const dscrPoints=refiLoan*FINANCING_DEFAULTS_2026.dscr.points;
-        const sm=FINANCING_DEFAULTS_2026.dscr.seasoningMonthsCashOut;
-        const allCashRefi=(()=>{const ci=totalCost+closingPurchase+totalHoldingCash;const co=refiLoan-dscrPoints-refiClosing;const ncli=ci-co;const acf=noi-refiPI*12;const coc=ncli>0?(acf/ncli)*100:0;const rp=ci>0?(co/ci)*100:0;const tf=dscrPoints+refiClosing;return {id:'allCashDscr',name:'Cash + DSCR Refi',cashRequired:ci,loanAmount:refiLoan,monthlyCarry:refiPI,totalFinancingCost:tf,acquisitionCost:purchase+closingPurchase,totalProjectCost:ci,netProfit:acf,coc,annualizedROI:coc,timeToFirstDollar:months+sm,risk:1.5,available:true,recyclePct:rp};})();
-        const hmDscr=(()=>{const hml=Math.min(purchase*hmTier.ltvPurchase+rehab,arv*hmTier.arv);const pts=hml*hmTier.points;const dp=totalCost-hml;const mi=hml*(hmTier.rate/12);const hc=mi*months+pts;const ci=Math.max(dp,0)+closingPurchase+pts+totalHoldingCash;const co=refiLoan-hml-dscrPoints-refiClosing;const ncli=Math.max(ci-co,0);const acf=noi-refiPI*12;const coc=ncli>0?(acf/ncli)*100:(acf>0?999:0);const rp=ci>0?(co/ci)*100:0;const tf=hc+dscrPoints+refiClosing;return {id:'hmDscr',name:'HM + DSCR Refi',cashRequired:ci,loanAmount:refiLoan,monthlyCarry:refiPI,totalFinancingCost:tf,acquisitionCost:purchase+closingPurchase,totalProjectCost:ci,netProfit:acf,coc,annualizedROI:coc,timeToFirstDollar:months+sm,risk:2.5,available:true,secondaryLoan:hml,recyclePct:rp};})();
-        const convConv=(()=>{const pl=purchase*0.75;const dp=purchase-pl;const pr=FINANCING_DEFAULTS_2026.conventionalCashOutRefi.rate;const ppi=(pl*(pr/12))/(1-Math.pow(1+pr/12,-360));const ci=dp+closingPurchase+rehab+totalHoldingCash;const rlc=arv*FINANCING_DEFAULTS_2026.conventionalCashOutRefi.ltvCap;const co=rlc-pl-refiClosing;const ncli=Math.max(ci-co,0);const npi=(rlc*(pr/12))/(1-Math.pow(1+pr/12,-360));const acf=noi-npi*12;const coc=ncli>0?(acf/ncli)*100:0;const rp=ci>0?(co/ci)*100:0;const tf=(ppi*months)+refiClosing;return {id:'convConv',name:'Conv + Conv Refi',cashRequired:ci,loanAmount:rlc,monthlyCarry:npi,totalFinancingCost:tf,acquisitionCost:purchase+closingPurchase,totalProjectCost:ci,netProfit:acf,coc,annualizedROI:coc,timeToFirstDollar:13,risk:1.5,available:rehab<20000,unavailableReason:rehab>=20000?'Conventional requires habitable property.':null,recyclePct:rp};})();
-        const subToDscr=(()=>{if(!subjectToAvail)return {id:'subToDscr',name:'Subject-To + DSCR',available:false,unavailableReason:'Enter seller mortgage details.',cashRequired:0,loanAmount:0,monthlyCarry:0,totalFinancingCost:0,acquisitionCost:0,totalProjectCost:0,netProfit:0,coc:0,annualizedROI:0,timeToFirstDollar:0,risk:0};const eq=Math.max(purchase-sellerBalance,0);const mi=sellerBalance*(sellerRate/12);const ci=eq+closingPurchase+rehab+totalHoldingCash+FINANCING_DEFAULTS_2026.subjectTo.legalSetupCost;const co=refiLoan-sellerBalance-dscrPoints-refiClosing;const ncli=Math.max(ci-co,0);const acf=noi-refiPI*12;const coc=ncli>0?(acf/ncli)*100:0;const rp=ci>0?(co/ci)*100:0;const tf=mi*months+dscrPoints+refiClosing+FINANCING_DEFAULTS_2026.subjectTo.legalSetupCost;return {id:'subToDscr',name:'Sub-To + DSCR Refi',cashRequired:ci,loanAmount:refiLoan,monthlyCarry:refiPI,totalFinancingCost:tf,acquisitionCost:eq+closingPurchase,totalProjectCost:ci,netProfit:acf,coc,annualizedROI:coc,timeToFirstDollar:months+sm,risk:3.0,available:true,secondaryLoan:sellerBalance,recyclePct:rp};})();
-        const sellerFin=(()=>{if(!deal.sellerFreeAndClear)return {id:'sellerFin',name:'Seller Fin + DSCR',available:false,unavailableReason:'Toggle Seller Free-and-Clear.',cashRequired:0,loanAmount:0,monthlyCarry:0,totalFinancingCost:0,acquisitionCost:0,totalProjectCost:0,netProfit:0,coc:0,annualizedROI:0,timeToFirstDollar:0,risk:0};const dp=purchase*0.10;const sl=purchase-dp;const sra=0.06;const mi=sl*(sra/12);const ci=dp+closingPurchase+rehab+totalHoldingCash;const co=refiLoan-sl-dscrPoints-refiClosing;const ncli=Math.max(ci-co,0);const acf=noi-refiPI*12;const coc=ncli>0?(acf/ncli)*100:0;const rp=ci>0?(co/ci)*100:0;const tf=mi*months+dscrPoints+refiClosing;return {id:'sellerFin',name:'Seller Fin + DSCR',cashRequired:ci,loanAmount:refiLoan,monthlyCarry:refiPI,totalFinancingCost:tf,acquisitionCost:dp+closingPurchase,totalProjectCost:ci,netProfit:acf,coc,annualizedROI:coc,timeToFirstDollar:months+sm,risk:2.0,available:true,secondaryLoan:sl,recyclePct:rp};})();
-        return [allCashRefi,hmDscr,convConv,subToDscr,sellerFin];
-    }
-    if(strategy==='wholesale'){
-        const targetFee=parseFloat(deal.targetAssignmentFee)||15000;
-        const emdOnly=(()=>{const emd=1000;return {id:'emdOnly',name:'EMD Only Assignment',cashRequired:emd,loanAmount:0,monthlyCarry:0,totalFinancingCost:0,acquisitionCost:emd,totalProjectCost:emd,netProfit:targetFee,coc:emd>0?(targetFee/emd)*100:0,annualizedROI:emd>0?(targetFee/emd)*100*(12/0.7):0,timeToFirstDollar:0.7,risk:1.5,available:true};})();
-        const trans=(()=>{const fee=Math.max(purchase*FINANCING_DEFAULTS_2026.transactionalFunding.feePct+FINANCING_DEFAULTS_2026.transactionalFunding.processingFee,FINANCING_DEFAULTS_2026.transactionalFunding.minFee);const co=fee+1000;const pf=targetFee-fee;return {id:'transactional',name:'Transactional Funding',cashRequired:co,loanAmount:purchase,monthlyCarry:0,totalFinancingCost:fee,acquisitionCost:co,totalProjectCost:co,netProfit:pf,coc:co>0?(pf/co)*100:0,annualizedROI:co>0?(pf/co)*100*(12/0.7):0,timeToFirstDollar:0.7,risk:2.0,available:true};})();
-        const emdLoan=(()=>{const emd=1000;const lf=emd*0.02+500;return {id:'emdLoan',name:'EMD-Only Loan',cashRequired:500,loanAmount:emd,monthlyCarry:0,totalFinancingCost:lf,acquisitionCost:500+emd,totalProjectCost:500+lf,netProfit:targetFee-lf,coc:((targetFee-lf)/500)*100,annualizedROI:((targetFee-lf)/500)*100*(12/0.7),timeToFirstDollar:0.7,risk:2.0,available:true};})();
-        const jv=(()=>{const jvf=targetFee/2;return {id:'jvBuyer',name:'JV with Cash Buyer',cashRequired:500,loanAmount:0,monthlyCarry:0,totalFinancingCost:0,acquisitionCost:500,totalProjectCost:500,netProfit:jvf,coc:(jvf/500)*100,annualizedROI:(jvf/500)*100*(12/0.7),timeToFirstDollar:0.7,risk:1.0,available:true};})();
-        const wholeHml=(()=>{const hml=purchase*hmTier.ltvPurchase;const pts=hml*hmTier.points;const dp=purchase-hml;const mi=hml*(hmTier.rate/12);const fc=mi*1+pts;const co=dp+closingPurchase+pts;const rn=arv*0.95-hml-fc;return {id:'wholeHml',name:'Double-Close + HML',cashRequired:co,loanAmount:hml,monthlyCarry:mi,totalFinancingCost:fc,acquisitionCost:co,totalProjectCost:co+fc,netProfit:rn-co,coc:co>0?((rn-co)/co)*100:0,annualizedROI:co>0?((rn-co)/co)*100*12:0,timeToFirstDollar:1,risk:3.5,available:true};})();
-        return [emdOnly,trans,emdLoan,jv,wholeHml];
-    }
-    return [];
-};
-
 const computeDealScore = (deal) => {
     const sqft=parseFloat(deal.sqft)||0;
     const arv=parseFloat(deal.arv)||0;
@@ -904,7 +849,7 @@ const HomePage = ({onChangeView}) => {
     const kpis=useMemo(()=>{const n=scored.length;const best=n?Math.max(...scored.map(d=>d.netProfit||0)):0;const avg=n?Math.round(scored.reduce((a,d)=>a+(d._score||0),0)/n):0;const buys=scored.filter(d=>d._verdict==='BUY').length;return {n,best,avg,buys};},[scored]);
     const today=new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
     const resume=deals[0]||null;
-    const stages=[{name:'Rehab scope',view:View.RehabEstimator},{name:'Analysis',view:View.StrategyAnalyzer},{name:'Financing',view:View.FinancingProfit},{name:'Score',view:View.DealScore}];
+    const stages=[{name:'Rehab scope',view:View.RehabEstimator},{name:'Analysis',view:View.StrategyAnalyzer},{name:'Score',view:View.DealScore}];
     const chip=(v)=>v==='BUY'?'bg-emerald-500/10 text-emerald-300 border-emerald-500/30':v==='WAIT'?'bg-amber-500/10 text-amber-300 border-amber-500/30':'bg-red-500/10 text-red-300 border-red-500/30';
     const Kpi=({n,l})=>(<div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl px-4 py-3"><p className="accent-num text-xl font-extrabold text-white">{n}</p><p className="text-[11px] uppercase tracking-wider text-slate-500 mt-0.5">{l}</p></div>);
     return (
@@ -1174,63 +1119,6 @@ const StrategyAnalyzer = ({onChangeView}) => {
                     </div>):(<div className="bg-[#141414] p-6 rounded-xl border border-[#2A2A2A] text-center text-sm text-slate-400">Risk simulation runs on Fix & Flip deals.</div>))}
                 </>)}
 
-                <button onClick={()=>onChangeView&&onChangeView(View.FinancingProfit)} className="w-full fire-bg text-black font-extrabold uppercase tracking-wider py-4 rounded-lg headline hover:opacity-90 flex items-center justify-center gap-2 mt-2">Continue to Financing <ChevronDown className="w-5 h-5 -rotate-90" /></button>
-            </div>
-            <div className="lg:col-span-1"><div className="lg:sticky lg:top-4"><DealSnapshotRail /></div></div>
-        </div>
-    );
-};
-
-const FinancingProfit = ({onChangeView}) => {
-    const {deal,updateDeal}=useDeal();
-    const toast=useToast();
-    const [sortBy,setSortBy]=useState('netProfit');
-    const sqft=parseFloat(deal.sqft)||0;
-    const arv=parseFloat(deal.arv)||0;
-    const purchase=parseFloat(deal.purchasePrice)||0;
-    const rehab=parseFloat(deal.finalEstimation)||parseFloat(deal.totalRehabCost)||computeRehabCost(deal).finalEstimation;
-    const targetProfit=parseFloat(deal.targetProfit)||0;
-    const metrics=useMemo(()=>getDealMetrics(arv,purchase,rehab,{ltv:parseFloat(deal.ltv)||0,interestRate:parseFloat(deal.interestRate)||0,holdingPeriod:parseFloat(deal.holdingPeriod)||0},sqft,deal.extraCosts||[],deal),[arv,purchase,rehab,deal.ltv,deal.interestRate,deal.holdingPeriod,sqft,deal.extraCosts,deal.computedDurationDays]);
-    const strategy=deal.selectedStrategy||'flip';
-    const fs=useMemo(()=>computeFinancingScenarios(deal,strategy),[deal,strategy]);
-    const sorted=useMemo(()=>{const a=[...fs];const dir=(sortBy==='cashRequired'||sortBy==='risk'||sortBy==='timeToFirstDollar')?1:-1;return a.sort((x,y)=>{if(!x.available&&y.available)return 1;if(x.available&&!y.available)return -1;return dir*((y[sortBy]||0)-(x[sortBy]||0));});},[fs,sortBy]);
-    const avail=fs.filter(s=>s.available);
-    const bestProfit=avail.length>0?Math.max(...avail.map(s=>s.netProfit||0)):0;
-    const lowestCash=avail.length>0?Math.min(...avail.map(s=>s.cashRequired||Infinity)):0;
-    const highestLev=avail.length>0?Math.max(...avail.map(s=>s.loanAmount||0)):0;
-    const highestRisk=avail.length>0?Math.max(...avail.map(s=>s.risk||0)):0;
-    const selectFin=(id)=>{if(!fs.find(s=>s.id===id)?.available){toast?.show('Scenario unavailable');return;}updateDeal({selectedFinancingScenario:id});toast?.show(`Selected scenario`);};
-    const selFin=fs.find(s=>s.id===deal.selectedFinancingScenario)||fs[0];
-    const addExtra=()=>updateDeal(p=>({...p,extraCosts:[...(p.extraCosts||[]),{id:Date.now(),name:'',amount:''}]}));
-    const updExtra=(id,f,v)=>updateDeal(p=>({...p,extraCosts:(p.extraCosts||[]).map(c=>c.id===id?{...c,[f]:v}:c)}));
-    const rmExtra=(id)=>updateDeal(p=>({...p,extraCosts:(p.extraCosts||[]).filter(c=>c.id!==id)}));
-    let npc='kpi-bad';
-    if(targetProfit>0){if(metrics.netProfit>=targetProfit)npc='kpi-good';else if(metrics.netProfit>=targetProfit*0.9)npc='kpi-warn';}else if(metrics.netProfit>0)npc='kpi-good';
-    return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-6">
-                <div className="bg-[#1A1A1A] p-6 rounded-xl border border-[#2A2A2A]">
-                    <h2 className="text-xl font-bold headline gradient-text mb-4 flex items-center gap-2"><DollarSign className="w-5 h-5" /> Profit Analysis</h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div><label className="text-xs uppercase text-slate-400">ARV</label><MoneyInput value={deal.arv} onChange={(v)=>updateDeal({arv:v})} placeholder="$0" className="w-full px-3 py-2.5 rounded mt-1 text-lg accent-num" /><p className="text-xs text-slate-500 mt-1">{sqft>0?`${formatCurrency(arv/sqft, true)}/sqft`:'\u00A0'}</p></div>
-                        <div><label className="text-xs uppercase text-slate-400">Purchase</label><MoneyInput value={deal.purchasePrice} onChange={(v)=>updateDeal({purchasePrice:v})} placeholder="$0" className="w-full px-3 py-2.5 rounded mt-1 text-lg accent-num" /><p className="text-xs text-slate-500 mt-1">{sqft>0?`${formatCurrency(purchase/sqft, true)}/sqft`:'\u00A0'}</p></div>
-                        <div><label className="text-xs uppercase text-slate-400">Target Profit</label><input type="number" value={deal.targetProfit} onChange={(e)=>updateDeal({targetProfit:e.target.value})} className="w-full px-3 py-2 rounded mt-1" /></div>
-                        <div><label className="text-xs uppercase text-slate-400">LTV %</label><input type="number" value={deal.ltv} onChange={(e)=>updateDeal({ltv:e.target.value})} className="w-full px-3 py-2 rounded mt-1" /></div>
-                        <div><label className="text-xs uppercase text-slate-400">Interest Rate %</label><input type="number" step="0.1" value={deal.interestRate} onChange={(e)=>updateDeal({interestRate:e.target.value})} className="w-full px-3 py-2 rounded mt-1" /></div>
-                        <div><label className="text-xs uppercase text-slate-400">Total Hold Period</label><div className="w-full px-3 py-2 rounded mt-1 bg-[#0F0F0F] border border-[#333] text-amber-400 font-bold accent-num">{metrics.holdingMonths?metrics.holdingMonths.toFixed(1):'-'} months</div><p className="text-xs text-slate-500 mt-1">Rehab {getProjectMonths(deal).rehabMonths.toFixed(1)}mo + 2mo closing/sale buffer (min 4mo)</p></div>
-                    </div>
-                    <div className="mt-4"><p className="text-xs uppercase text-slate-400 mb-2">Extra Costs</p>{(deal.extraCosts||[]).map(c=>(<div key={c.id} className="flex gap-2 mb-2"><input type="text" placeholder="Name" value={c.name} onChange={(e)=>updExtra(c.id,'name',e.target.value)} className="flex-1 px-2 py-1 rounded text-sm" /><input type="number" placeholder="$" value={c.amount} onChange={(e)=>updExtra(c.id,'amount',e.target.value)} className="w-32 px-2 py-1 rounded text-sm" /><button onClick={()=>rmExtra(c.id)} className="px-2 text-red-400"><X className="w-4 h-4" /></button></div>))}<button onClick={addExtra} className="text-xs px-3 py-1 bg-[#0F0F0F] hover:bg-[#222] rounded">+ Add Extra Cost</button></div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6">
-                        <div className={`p-4 rounded ${npc}`}><p className="text-xs uppercase text-slate-400">Net Profit</p><p className="text-2xl font-bold accent-num">{formatCurrencySimple(metrics.netProfit)}</p></div>
-                        <div className={`p-4 rounded ${metrics.roi>=25?'kpi-good':(metrics.roi>=10?'kpi-warn':'kpi-bad')}`}><p className="text-xs uppercase text-slate-400">ROI</p><p className="text-2xl font-bold accent-num">{formatPct(metrics.roi)}</p></div>
-                        <div className={`p-4 rounded ${metrics.profitMargin>=20?'kpi-good':(metrics.profitMargin>=10?'kpi-warn':'kpi-bad')}`}><p className="text-xs uppercase text-slate-400">Margin</p><p className="text-2xl font-bold accent-num">{formatPct(metrics.profitMargin)}</p></div>
-                    </div>
-                </div>
-                <div className="bg-[#1A1A1A] p-6 rounded-xl border border-[#2A2A2A]">
-                    <div className="flex items-center justify-between mb-4 flex-wrap gap-2"><h2 className="text-xl font-bold headline gradient-text flex items-center gap-2"><Layers className="w-5 h-5" /> Financing Scenarios <span className="text-sm text-slate-400 capitalize font-normal">({strategy})</span></h2><select value={sortBy} onChange={(e)=>setSortBy(e.target.value)} className="text-xs px-2 py-1 rounded"><option value="netProfit">Best Profit</option><option value="cashRequired">Lowest Cash</option><option value="risk">Lowest Risk</option><option value="annualizedROI">Best Annualized ROI</option><option value="timeToFirstDollar">Fastest Cash Back</option></select></div>
-                    {arv===0||purchase===0?(<div className="border border-dashed border-amber-500/40 rounded-lg p-4 text-center"><p className="text-xs text-amber-300">Financing scenarios calculate from ARV and Purchase. Enter them above or on the Strategy tab.</p></div>):(<div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="text-slate-500 uppercase"><th className="text-left py-2 px-2">Scenario</th><th className="px-2">Cash Req</th><th className="px-2">Loan</th><th className="px-2">Mo Carry</th><th className="px-2">Net Profit</th><th className="px-2">CoC</th><th className="px-2">Ann ROI</th><th className="px-2">TTFD</th><th className="px-2">Risk</th></tr></thead><tbody>{sorted.map(s=>{const sel=deal.selectedFinancingScenario===s.id;const bp=s.netProfit===bestProfit&&s.available;const lc=s.cashRequired===lowestCash&&s.available;const hl=s.loanAmount===highestLev&&s.available;const hr=s.risk===highestRisk&&s.available;return (<tr key={s.id} onClick={()=>selectFin(s.id)} className={`border-t border-[#2A2A2A] cursor-pointer hover:bg-[#0F0F0F] ${sel?'bg-amber-500/10':''} ${!s.available?'opacity-40':''}`}><td className="py-2 px-2 text-white font-semibold">{s.name}{!s.available&&<span className="block text-xs text-slate-500 italic">{s.unavailableReason}</span>}</td><td className={`py-2 px-2 accent-num text-center ${lc?'text-blue-400 font-bold':'text-white'}`}>{s.available?formatCurrencySimple(s.cashRequired):'—'}</td><td className={`py-2 px-2 accent-num text-center ${hl?'text-amber-400 font-bold':'text-white'}`}>{s.available?formatCurrencySimple(s.loanAmount):'—'}</td><td className="py-2 px-2 accent-num text-center text-white">{s.available?formatCurrencySimple(s.monthlyCarry):'—'}</td><td className={`py-2 px-2 accent-num text-center ${bp?'text-emerald-400 font-bold':'text-white'}`}>{s.available?formatCurrencySimple(s.netProfit):'—'}</td><td className="py-2 px-2 accent-num text-center text-white">{s.available?formatPct(s.coc,0):'—'}</td><td className="py-2 px-2 accent-num text-center text-white">{s.available?formatPct(s.annualizedROI,0):'—'}</td><td className="py-2 px-2 accent-num text-center text-white">{s.available?(s.timeToFirstDollar||0).toFixed(1)+'mo':'—'}</td><td className={`py-2 px-2 accent-num text-center ${hr?'text-red-400 font-bold':'text-white'}`}>{s.available?(s.risk||0).toFixed(1)+'/5':'—'}</td></tr>);})}</tbody></table></div>)}
-                </div>
-                {arv>0&&purchase>0&&selFin&&selFin.available&&(<div className="bg-[#1A1A1A] p-6 rounded-xl border-2 border-amber-500/40"><h3 className="font-bold headline gradient-text mb-3">{selFin.name} (Selected)</h3><div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm"><div><p className="text-xs text-slate-500">Acquisition Cost</p><p className="accent-num text-white">{formatCurrencySimple(selFin.acquisitionCost)}</p></div><div><p className="text-xs text-slate-500">Total Project Cost</p><p className="accent-num text-white">{formatCurrencySimple(selFin.totalProjectCost)}</p></div><div><p className="text-xs text-slate-500">Total Financing Cost</p><p className="accent-num text-white">{formatCurrencySimple(selFin.totalFinancingCost)}</p></div><div><p className="text-xs text-slate-500">Time to First Dollar</p><p className="accent-num text-white">{(selFin.timeToFirstDollar||0).toFixed(1)} mo</p></div></div></div>)}
                 <button onClick={()=>onChangeView&&onChangeView(View.DealScore)} className="w-full fire-bg text-black font-extrabold uppercase tracking-wider py-4 rounded-lg headline hover:opacity-90 flex items-center justify-center gap-2 mt-2">Continue to Deal Score <ChevronDown className="w-5 h-5 -rotate-90" /></button>
             </div>
             <div className="lg:col-span-1"><div className="lg:sticky lg:top-4"><DealSnapshotRail /></div></div>
@@ -1290,14 +1178,14 @@ const DealScore = () => {
     );
 };
 
-const useTabCompletion=(deal)=>{const hasScope=Object.keys(deal.selectedItems||{}).some(k=>deal.selectedItems[k]);const hasNumbers=(parseFloat(deal.arv)||0)>0&&(parseFloat(deal.purchasePrice)||0)>0;const ready=hasScope&&hasNumbers;return {[View.RehabEstimator]:hasScope,[View.StrategyAnalyzer]:ready,[View.FinancingProfit]:ready,[View.DealScore]:ready};};
+const useTabCompletion=(deal)=>{const hasScope=Object.keys(deal.selectedItems||{}).some(k=>deal.selectedItems[k]);const hasNumbers=(parseFloat(deal.arv)||0)>0&&(parseFloat(deal.purchasePrice)||0)>0;const ready=hasScope&&hasNumbers;return {[View.RehabEstimator]:hasScope,[View.StrategyAnalyzer]:ready,[View.DealScore]:ready};};
 
 const Header = ({currentView,onChangeView,onOpenPipeline}) => {
     const {deal}=useDeal();
     const {deals}=useSavedDealsContext();
     const completion=useTabCompletion(deal);
     const toast=useToast();
-    const tabs=[{id:View.Home,label:'Home',Icon:Home},{id:View.RehabEstimator,label:'Rehab',Icon:Construction},{id:View.StrategyAnalyzer,label:'Analysis',Icon:Compass},{id:View.FinancingProfit,label:'Financing',Icon:DollarSign},{id:View.DealScore,label:'Score',Icon:Award}];
+    const tabs=[{id:View.Home,label:'Home',Icon:Home},{id:View.RehabEstimator,label:'Rehab',Icon:Construction},{id:View.StrategyAnalyzer,label:'Analysis',Icon:Compass},{id:View.DealScore,label:'Score',Icon:Award}];
     const handleShare=async()=>{const url=`${window.location.origin}${window.location.pathname}?deal=${encodeDealToUrl(deal)}`;try{await navigator.clipboard.writeText(url);toast?.show('Share URL copied');}catch(e){window.prompt('Copy this URL:',url);}};
     return (
         <nav className="bg-[#0F0F0F] border-b border-[#2A2A2A] sticky top-0 z-30 no-print">
@@ -1323,7 +1211,7 @@ const Header = ({currentView,onChangeView,onOpenPipeline}) => {
 const MobileBottomTabBar = ({currentView,onChangeView}) => {
     const {deal}=useDeal();
     const completion=useTabCompletion(deal);
-    const tabs=[{id:View.Home,label:'Home',Icon:Home},{id:View.RehabEstimator,label:'Rehab',Icon:Construction},{id:View.StrategyAnalyzer,label:'Analysis',Icon:Compass},{id:View.FinancingProfit,label:'Finance',Icon:DollarSign},{id:View.DealScore,label:'Score',Icon:Award}];
+    const tabs=[{id:View.Home,label:'Home',Icon:Home},{id:View.RehabEstimator,label:'Rehab',Icon:Construction},{id:View.StrategyAnalyzer,label:'Analysis',Icon:Compass},{id:View.DealScore,label:'Score',Icon:Award}];
     return (<div className="mobile-tab-bar no-print lg:hidden">{tabs.map(t=>(<button key={t.id} onClick={()=>onChangeView(t.id)} className={`flex flex-col items-center justify-center px-1 py-1 rounded text-[11px] relative ${currentView===t.id?'text-amber-400':'text-slate-400'}`}><t.Icon className="w-5 h-5 mb-0.5" /><span>{t.label}</span>{completion[t.id]&&currentView!==t.id&&<span className="w-1.5 h-1.5 rounded-full bg-emerald-400 absolute top-0 right-0"></span>}</button>))}</div>);
 };
 
@@ -1335,7 +1223,6 @@ const AppShell = ({currentView,onChangeView}) => {
             <div style={{display:currentView===View.Home?'block':'none'}}><HomePage onChangeView={onChangeView} /></div>
             <div style={{display:currentView===View.RehabEstimator?'block':'none'}}><RehabEstimator onChangeView={onChangeView} /></div>
             <div style={{display:currentView===View.StrategyAnalyzer?'block':'none'}}><StrategyAnalyzer onChangeView={onChangeView} /></div>
-            <div style={{display:currentView===View.FinancingProfit?'block':'none'}}><FinancingProfit onChangeView={onChangeView} /></div>
             <div style={{display:currentView===View.DealScore?'block':'none'}}><DealScore /></div>
             <div className="print-only mt-6 pt-3 border-t border-slate-300 text-xs text-center"><p>The Unshakable Investor, Fix and Flip Deal Analyzer v4.1</p></div>
         </main>
