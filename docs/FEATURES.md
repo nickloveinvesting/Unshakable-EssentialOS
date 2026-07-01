@@ -71,8 +71,21 @@ The deal's full financial workup. Assumes **fix & flip** by default, with a togg
      (8,000 runs with realistic overrun skew → chance of profit, chance of hitting target,
      and P10 / P50 / P90 net profit).
 
-Rental models NOI, cap rate, DSCR, cash flow, and cash-on-cash with a DSCR refinance;
-wholesale models assignment-fee scenarios.
+### Rental / BRRRR view
+Switching to Rental re-tools the whole Analysis view around rental returns (not flip):
+
+- **Result strip** shows rental KPIs — **monthly cash flow**, a color-coded **DSCR** badge
+  (lender minimum 1.25), and **cap rate** (with cash-on-cash).
+- **Summary** shows a proper annual P&L — effective gross income (after 5% vacancy) →
+  operating expenses (40%) → **NOI** → DSCR debt service → **annual cash flow** — plus a
+  **BRRRR capital** block (all-in cost, 75%-ARV DSCR cash-out refi, cash left in the deal,
+  cash-on-cash) and ratio chips (cap rate, DSCR, cash flow/mo, CoC) with formula popovers.
+- When the refinance returns all your cash (cash left in ≤ 0), cash-on-cash reads **∞**
+  ("all cash out") instead of a misleading 0%.
+- Financing model: 30-yr DSCR cash-out refi at 7.25% on 75% of ARV. Scenarios (Aggressive /
+  Market / Conservative) vary rent, vacancy, and expenses.
+
+Wholesale models assignment-fee scenarios.
 
 ## Unified profit engine
 Net profit, ROI, and margin are computed by a single engine, so the **Analysis tab, the
@@ -83,6 +96,9 @@ and a different number on another.
 A live market panel on the right rail, powered by a database of **26,000+ ZIP codes** of
 Zillow/Redfin data. It appears once ZIP and bedrooms are entered and shows, for that ZIP:
 - Typical value for the entered bedroom count — with **"Use as ARV"** one-click apply.
+- **Typical rent (ZIP)** — monthly rent from Zillow's ZORI index (7,800+ ZIPs), with a
+  **"Use as rent"** one-click apply that fills the rental analysis's Estimated rent field.
+  ZIPs without ZORI coverage fall back to the 41-metro rent benchmark.
 - Median sale price, median $/sqft, days on market, sale-to-list ratio.
 - A market-heat badge (fast / balanced / slow) from months of supply.
 - A live check: "your ARV is X% above/below the ZIP median $/sqft."
@@ -110,6 +126,7 @@ market snapshot.
 ## Data sources
 - **Rehab costs:** itemized cost library, metro-adjusted.
 - **Market benchmarks:** 41-metro index plus ZIP-level Zillow/Redfin export (26K+ ZIPs).
+- **ZIP rent:** Zillow ZORI monthly rent index, 7,800+ ZIPs (as of 2026-05).
 - **ZIP → metro:** live geolocation lookup.
 
 ## Related docs
